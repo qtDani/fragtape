@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OBSPlayed</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f2024'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23ef4444'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #111216; --side: #16171c; --panel: #1b1c22; --card: #22242c; --card-hi: #2b2e39; --line: #2f3240;
+    --text: #e8e9ee; --muted: #9a9eb0; --faint: #686c80;
+    --accent: #3b82f6; --rec: #ef4444; --clip: #f59e0b; --ok: #22c55e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 "Segoe UI", system-ui, sans-serif; }
+  body { display: grid; grid-template-columns: 210px 1fr; overflow: hidden; user-select: none; }
+  input, textarea { user-select: text; }
+  button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; padding: 6px 12px; }
+  button:hover { background: var(--card-hi); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { filter: brightness(1.1); }
+  button.danger:hover { background: rgba(239,68,68,.2); border-color: rgba(239,68,68,.5); }
+  button[disabled] { opacity: .5; cursor: default; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  h2 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px;
+       display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  h2 small { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--faint); }
+
+  /* sidebar */
+  aside { background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 16px 10px; gap: 4px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; padding: 0 8px 16px; }
+  .logo i { width: 26px; height: 26px; border-radius: 7px; background: #1f2024; display: grid; place-items: center; }
+  .logo i::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--rec); }
+  nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: transparent; color: var(--muted); padding: 9px 10px; font-size: 14px; }
+  nav button svg { width: 18px; height: 18px; fill: currentColor; opacity: .85; }
+  nav button:hover { background: var(--card); color: var(--text); }
+  nav button.on { background: var(--card-hi); color: var(--text); }
+  nav .count { margin-left: auto; font-size: 11px; color: var(--faint); }
+  .live { margin-top: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .live .row { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
+  .live.rec .dot { background: var(--rec); box-shadow: 0 0 0 4px rgba(239,68,68,.18); animation: pulse 1.6s infinite; }
+  .live.clip .dot { background: var(--clip); box-shadow: 0 0 0 4px rgba(245,158,11,.18); }
+  .live.off .dot { background: var(--faint); }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .live .what { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live .sub { color: var(--muted); font-size: 12px; }
+  .live .timer { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .live button { width: 100%; padding: 6px; font-size: 12px; }
+
+  main { overflow: auto; position: relative; }
+  .view { display: none; padding: 22px 28px 40px; max-width: 1500px; }
+  .view.on { display: block; }
+  .head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .head .grow { flex: 1; }
+  .chips { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 3px; gap: 2px; }
+  .chips button { border: 0; background: transparent; color: var(--muted); padding: 5px 12px; font-size: 12.5px; }
+  .chips button.on { background: var(--card-hi); color: var(--text); }
+  select, .field { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; outline: none; }
+  .field:focus { border-color: var(--accent); }
+
+  /* clip grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform .12s, border-color .12s; }
+  .card:hover { transform: translateY(-2px); border-color: #454a5e; }
+  .thumb { aspect-ratio: 16/9; background: #0b0c0f center/cover no-repeat; position: relative; }
+  .thumb .len { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.75); padding: 1px 6px; border-radius: 4px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .thumb .kind { position: absolute; left: 6px; top: 6px; font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 2px 6px; border-radius: 4px; }
+  .kind.clip { background: rgba(245,158,11,.9); color: #1c1203; }
+  .kind.session { background: rgba(239,68,68,.9); color: #fff; }
+  .kind.live { background: #ef4444; color: #fff; animation: pulse 1.6s infinite; }
+  .thumb .ev { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.75); padding: 1px 6px; border-radius: 4px; font-size: 11.5px; }
+  .thumb .star { position: absolute; right: 6px; top: 4px; font-size: 16px; color: #fde047; text-shadow: 0 1px 3px #000; }
+  .card .info { padding: 9px 11px 11px; }
+  .card .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .meta { color: var(--muted); font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .group-title { display: flex; align-items: center; gap: 10px; margin: 26px 0 12px; font-weight: 600; font-size: 15px; }
+  .group-title:first-child { margin-top: 0; }
+  .group-title small { color: var(--faint); font-weight: 400; font-size: 12px; }
+  .icon { width: 28px; height: 28px; border-radius: 7px; background: var(--card-hi); display: grid; place-items: center; font-weight: 700; color: var(--muted); overflow: hidden; flex: none; }
+  .icon img { width: 100%; height: 100%; object-fit: cover; }
+  .empty { color: var(--faint); text-align: center; padding: 70px 20px; font-size: 14px; }
+  .empty b { display: block; color: var(--text); font-size: 17px; margin-bottom: 6px; }
+
+  /* player */
+  #player { position: absolute; inset: 0; background: var(--bg); display: none; padding: 18px 28px 28px; overflow: auto; }
+  #player.on { display: block; }
+  #player .top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  #player .top .ttl { font-size: 18px; font-weight: 600; outline: none; border-radius: 6px; padding: 2px 6px; min-width: 60px; user-select: text; }
+  #player .top .ttl:focus { background: var(--panel); box-shadow: 0 0 0 1px var(--accent); }
+  #player .top .sub { color: var(--muted); }
+  .stage { display: grid; grid-template-columns: 1fr 280px; gap: 18px; align-items: start; }
+  video { width: 100%; max-height: calc(100vh - 230px); background: #000; border-radius: 10px; display: block; }
+  .timeline { position: relative; height: 34px; margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  .timeline .hl { position: absolute; top: 0; bottom: 0; background: rgba(245,158,11,.18); border-left: 1px solid rgba(245,158,11,.5); border-right: 1px solid rgba(245,158,11,.5); }
+  .timeline .sel { position: absolute; top: -1px; bottom: -1px; background: rgba(59,130,246,.25); border: 2px solid var(--accent); border-radius: 4px; pointer-events: none; }
+  .timeline .mk { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--rec); box-shadow: 0 0 0 2px var(--panel); }
+  .timeline .mk.manual { background: var(--accent); }
+  .timeline .head { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #fff; margin: 0; pointer-events: none; }
+  .tools { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  .tools .t { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .tools .grow { flex: 1; }
+  .side { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; max-height: calc(100vh - 120px); overflow: auto; }
+  .event { display: grid; grid-template-columns: 52px 1fr; gap: 8px; padding: 7px 8px; border-radius: 6px; cursor: pointer; }
+  .event:hover { background: var(--card); }
+  .event .at { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .event .d { color: var(--faint); font-size: 12px; }
+  .note { color: var(--faint); font-size: 12px; margin-top: 8px; }
+
+  /* games + settings */
+  section.box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+  .seg { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 2px; gap: 2px; }
+  .seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: 5px; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .seg button:hover { color: var(--text); background: var(--card); }
+  .seg button.on { color: #fff; background: var(--card-hi); }
+  .seg button.on[data-mode="full"] { background: rgba(239,68,68,.22); color: #fecaca; }
+  .seg button.on[data-mode="highlights"] { background: rgba(245,158,11,.22); color: #fde68a; }
+  .seg button.on[data-mode="ask"] { background: rgba(59,130,246,.22); color: #bfdbfe; }
+  .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; }
+  .game { display: grid; grid-template-columns: 40px 1fr auto; gap: 8px 12px; align-items: center; padding: 10px; border-radius: 8px; background: var(--card); }
+  .game.playing { outline: 1px solid var(--ok); }
+  .game .icon { width: 40px; height: 40px; border-radius: 9px; }
+  .game .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .game .meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .game .seg { grid-column: 1 / -1; width: 100%; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 4px; background: rgba(34,197,94,.16); color: #86efac; margin-left: 6px; vertical-align: 1px; }
+  .x { background: none; border: 0; color: var(--faint); font-size: 17px; width: 26px; height: 26px; padding: 0; }
+  .x:hover { color: var(--text); background: var(--card-hi); }
+  .search { position: relative; max-width: 520px; }
+  .search input { width: 100%; padding-left: 32px; }
+  .search svg { position: absolute; left: 10px; top: 10px; width: 14px; height: 14px; fill: var(--faint); }
+  #results { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; max-width: 520px; max-height: 300px; overflow: auto; }
+  .result { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 5px 6px; border-radius: 6px; }
+  .result:hover { background: var(--card); }
+  .result button { padding: 3px 12px; font-size: 12px; }
+  .done { color: var(--faint); font-size: 12px; }
+  .pref { display: grid; grid-template-columns: 170px auto 1fr; align-items: center; gap: 14px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .pref:first-of-type { border-top: 0; }
+  .pref label { color: var(--text); }
+  .pref .why { color: var(--faint); font-size: 12px; }
+  #ask { display: none; border-color: var(--accent); background: linear-gradient(180deg, rgba(59,130,246,.14), var(--panel)); margin-bottom: 16px; }
+  #ask.show { display: block; }
+  #ask .title { font-weight: 600; font-size: 15px; margin-bottom: 10px; }
+  #ask .choices { display: flex; gap: 8px; }
+  .log { font: 11.5px/1.5 Consolas, monospace; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; white-space: pre-wrap; user-select: text; }
+  .warn { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35); color: #fde68a; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #2b2e39; border: 1px solid var(--line); padding: 9px 16px; border-radius: 8px; display: none; z-index: 9; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  #toast.err { border-color: rgba(239,68,68,.6); color: #fecaca; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="logo"><i></i>OBSPlayed</div>
+  <nav>
+    <button data-view="clips" class="on"><svg viewBox="0 0 24 24"><path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm6 3.5v7l6-3.5-6-3.5z"/></svg>Clips<span class="count" id="nclips"></span></button>
+    <button data-view="games"><svg viewBox="0 0 24 24"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.8 4a2.5 2.5 0 0 1-4.3 1.2L14.5 16h-5l-2.3 2.2A2.5 2.5 0 0 1 2.9 17l-.8-4A5 5 0 0 1 7 7zm1 3v2H6v2h2v2h2v-2h2v-2h-2v-2H8zm8.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>Games<span class="count" id="ngames"></span></button>
+    <button data-view="settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>Settings</button>
+  </nav>
+  <div class="live off" id="live">
+    <div class="row"><div class="dot"></div><div class="what">Starting…</div><div class="timer"></div></div>
+    <div class="sub"></div>
+    <button id="markbtn" style="display:none">Save highlight</button>
+    <button id="stopbtn" style="display:none">Stop recording</button>
+  </div>
+</aside>
+
+<main>
+  <section class="view on" id="v-clips">
+    <section class="box" id="ask"><div class="title"></div><div class="choices">
+      <button class="primary" data-answer="full">Record whole session</button>
+      <button data-answer="highlights">Only highlights</button>
+      <button data-answer="off">Nothing</button></div></section>
+    <div id="obswarn" class="warn" style="display:none">OBS Studio isn't installed. OBSPlayed uses it to record: get it from <b>obsproject.com</b>, then restart OBSPlayed.</div>
+    <div class="head">
+      <h1>Clips</h1>
+      <div class="chips" id="kind"><button data-kind="all" class="on">All</button><button data-kind="clip">Highlights</button><button data-kind="session">Sessions</button><button data-kind="fav">★</button></div>
+      <select id="gamefilter"><option value="">All games</option></select>
+      <div class="grow"></div>
+      <input class="field" id="cq" placeholder="Search…" autocomplete="off">
+      <button id="openfolder">Open folder</button>
+    </div>
+    <div id="clips"></div>
+  </section>
+
+  <section class="view" id="v-games">
+    <div class="head"><h1>Games</h1><div class="grow"></div></div>
+    <section class="box">
+      <h2>New games <small>what to do the first time a game is played</small></h2>
+      <div class="seg" id="default"></div>
+    </section>
+    <section class="box">
+      <h2>Add a game <small id="dbcount"></small></h2>
+      <div class="search">
+        <svg viewBox="0 0 24 24"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
+        <input class="field" id="q" placeholder="Search ~10,000 games, or type an .exe name" autocomplete="off" spellcheck="false">
+      </div>
+      <div id="results"></div>
+    </section>
+    <section class="box">
+      <h2>Your games <small id="gcount"></small></h2>
+      <div class="head" style="margin-bottom:12px">
+        <input class="field" id="filter" placeholder="Filter…" autocomplete="off">
+        <div class="chips" id="gview"><button data-view="all" class="on">All</button><button data-view="installed">Installed</button></div>
+        <button id="scan" title="Find games from Steam, Riot and Epic on this PC">Scan PC</button>
+      </div>
+      <div class="games" id="games"></div>
+      <div class="note">Ask = ask me next time · Record = whole session, kills become markers · Clips = only save highlights (kills and your hotkey) · Off = ignore</div>
+    </section>
+  </section>
+
+  <section class="view" id="v-settings">
+    <div class="head"><h1>Settings</h1><div class="grow"></div><small class="done" id="recinfo"></small></div>
+    <section class="box">
+      <h2>Recording</h2>
+      <div id="prefs"></div>
+    </section>
+    <section class="box">
+      <h2>Storage</h2>
+      <div class="pref"><label>Videos folder</label><code id="folder"></code><div><button id="openfolder2">Open</button></div></div>
+      <div class="pref"><label>Clip editor</label><span id="ffmpeg"></span><div class="why">Saving a part of a video as a new clip uses ffmpeg (free).</div></div>
+    </section>
+    <section class="box">
+      <h2>How it works <small id="version"></small></h2>
+      <div class="note" style="margin-top:0">OBSPlayed starts its own hidden copy of OBS Studio only while a game is being recorded, with its own settings: your normal OBS is never touched. Between games only the game detection runs (about 2 ms every 2 seconds). This window can be closed: OBSPlayed keeps running in the tray.</div>
+      <h2 style="margin-top:14px">Activity</h2>
+      <div class="log" id="log"></div>
+    </section>
+  </section>
+
+  <div id="player">
+    <div class="top"><button id="back">← Back</button><div class="ttl" id="ptitle" contenteditable="true" spellcheck="false"></div><div class="sub" id="psub"></div></div>
+    <div class="stage">
+      <div>
+        <video id="video" controls preload="metadata"></video>
+        <div class="timeline" id="tl"></div>
+        <div class="tools">
+          <button id="setin" title="Start the clip here ( [ )">[ Start</button>
+          <button id="setout" title="End the clip here ( ] )">End ]</button>
+          <span class="t" id="seltxt">Pick a start and an end to save a clip</span>
+          <button class="primary" id="savesel" disabled>Save clip</button>
+          <div class="grow"></div>
+          <button id="fav">☆ Favorite</button>
+          <button id="reveal">Show in folder</button>
+          <button class="danger" id="del">Delete</button>
+        </div>
+        <div class="note" id="trimnote"></div>
+      </div>
+      <div class="side"><h2>Moments <small id="nev"></small></h2><div id="events"></div></div>
+    </div>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+const MODES = [["ask", "Ask"], ["full", "Record"], ["highlights", "Clips"], ["off", "Off"]];
+const MODE_TEXT = { full: "Recording the whole session", highlights: "Saving highlights", off: "Not recording" };
+const SOURCE = { steam: "Steam", riot: "Riot", epic: "Epic", custom: "Custom" };
+let state = null, clips = [], clipsKey = "", pageRev = null, kind = "all", gview = "all", current = null, sel = [null, null];
+
+async function api(path, body) {
+  const opts = { headers: { "X-OBSPlayed-Token": TOKEN } };
+  if (body) { opts.method = "POST"; opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
+  const r = await fetch(path, opts), data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.status);
+  return data;
+}
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "data") Object.assign(e.dataset, v); else if (k === "style") e.style.cssText = v; else e[k] = v;
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+function toast(msg, err) { const t = $("#toast"); t.textContent = msg; t.className = err ? "err" : ""; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 3500); }
+async function act(path, body) { try { const r = await api(path, body); await refresh(true); return r; } catch (e) { toast(e.message || e, true); } }
+function icon(src, name) {
+  const box = el("div", { class: "icon" });
+  if (src) { const img = el("img", { src, alt: "", loading: "lazy" }); img.onerror = () => box.textContent = (name || "?")[0].toUpperCase(); box.append(img); }
+  else box.textContent = (name || "?")[0].toUpperCase();
+  return box;
+}
+function clock(s) { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = String(Math.floor(s % 3600 / 60)).padStart(h ? 2 : 1, "0"), x = String(s % 60).padStart(2, "0"); return h ? `${h}:${m}:${x}` : `${m}:${x}`; }
+function ago(ts) {
+  if (!ts) return "never played";
+  const s = Date.now() / 1000 - ts;
+  if (s < 90) return "just now"; if (s < 3600) return `${Math.round(s / 60)} min ago`; if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  const d = Math.round(s / 86400); return d === 1 ? "yesterday" : d < 30 ? `${d} days ago` : new Date(ts * 1000).toLocaleDateString();
+}
+function playtime(s) { if (!s) return null; const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60); return h ? `${h} h ${m} min` : `${m} min`; }
+function size(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + " GB" : Math.max(1, Math.round(b / 1e6)) + " MB"; }
+function gameIcon(name) { const g = (state?.games || []).find(g => g.name.toLowerCase() === (name || "").toLowerCase()); return g?.icon || null; }
+
+/* ---------- navigation ---------- */
+function show(view) {
+  $$("nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+  $$(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + view));
+  closePlayer();
+  if (view === "clips") loadClips();
+}
+$$("nav button").forEach(b => b.onclick = () => show(b.dataset.view));
+
+/* ---------- live status ---------- */
+function renderLive() {
+  const st = state.status || {}, a = state.app || {}, box = $("#live");
+  box.className = "live " + (a.recording ? "rec" : a.replay ? "clip" : st.game ? "" : "");
+  box.querySelector(".what").textContent = st.game || "Watching for games";
+  box.querySelector(".sub").textContent = st.game
+    ? (a.recording ? "Recording" : a.replay ? `Highlights on · press ${a.hotkey} to clip` : st.mode ? MODE_TEXT[st.mode] : "Waiting for your choice")
+    : "Start a game and OBSPlayed takes it from there";
+  box.querySelector(".timer").textContent = st.game && st.since ? clock(Date.now() / 1000 - st.since) : "";
+  $("#markbtn").style.display = st.game && (a.recording || a.replay) ? "" : "none";
+  $("#markbtn").textContent = `Save highlight (${a.hotkey})`;
+  $("#stopbtn").style.display = a.recording ? "" : "none";
+  const ask = $("#ask"), pending = (st.asking || [])[0];
+  ask.classList.toggle("show", !!pending);
+  if (pending) { ask.querySelector(".title").textContent = `New game: ${pending}. What should OBSPlayed record?`; ask.dataset.game = pending; }
+  $("#obswarn").style.display = a.obs_found === false ? "" : "none";
+}
+$("#markbtn").onclick = () => act("/api/mark", {}).then(() => toast("Highlight saved"));
+$("#stopbtn").onclick = () => act("/api/stop", {});
+$$("[data-answer]").forEach(b => b.onclick = () => act("/api/answer", { name: $("#ask").dataset.game, mode: b.dataset.answer }));
+
+/* ---------- clips ---------- */
+async function loadClips(force) {
+  try {
+    const data = await api("/api/clips");
+    const key = JSON.stringify(data.clips);
+    if (key === clipsKey && !force) return;
+    clipsKey = key; clips = data.clips;
+    $("#nclips").textContent = clips.length || "";
+    const games = [...new Set(clips.map(c => c.game))].sort();
+    const gf = $("#gamefilter"), cur = gf.value;
+    gf.replaceChildren(el("option", { value: "", textContent: "All games" }), ...games.map(g => el("option", { value: g, textContent: g })));
+    gf.value = games.includes(cur) ? cur : "";
+    renderClips();
+    thumbQueue(clips.filter(c => !c.live && (!c.thumb || c.duration == null)));
+    const want = location.hash.match(/^#clip=(\w+)/);
+    if (want && !current) { const c = clips.find(c => c.id === want[1]); history.replaceState(null, "", location.pathname + location.search); if (c) openPlayer(c); }
+  } catch (e) { /* app restarting */ }
+}
+function renderClips() {
+  const q = $("#cq").value.trim().toLowerCase(), g = $("#gamefilter").value;
+  const list = clips.filter(c => (kind === "all" || (kind === "fav" ? c.favorite : c.kind === kind)) && (!g || c.game === g)
+    && (!q || (c.title + " " + c.game + " " + c.name).toLowerCase().includes(q)));
+  const out = $("#clips");
+  if (!list.length) {
+    out.replaceChildren(el("div", { class: "empty" }, el("b", { textContent: clips.length ? "Nothing matches" : "No clips yet" }),
+      clips.length ? "Try another filter." : "Play a game: OBSPlayed records it (or just its highlights) and everything shows up here."));
+    return;
+  }
+  const groups = new Map();
+  for (const c of list) { if (!groups.has(c.game)) groups.set(c.game, []); groups.get(c.game).push(c); }
+  const kids = [];
+  for (const [game, items] of groups) {
+    kids.push(el("div", { class: "group-title" }, icon(gameIcon(game), game), game, el("small", { textContent: `${items.length} video${items.length > 1 ? "s" : ""}` })));
+    kids.push(el("div", { class: "grid" }, ...items.map(card)));
+  }
+  out.replaceChildren(...kids);
+}
+function card(c) {
+  const th = el("div", { class: "thumb", style: c.thumb ? `background-image:url("/thumb/${c.id}?t=${TOKEN}&v=${c.mtime}")` : "" },
+    el("span", { class: "kind " + (c.live ? "live" : c.kind), textContent: c.live ? "● REC" : c.kind === "clip" ? "CLIP" : "SESSION" }),
+    c.duration ? el("span", { class: "len", textContent: clock(c.duration) }) : null,
+    c.markers.length ? el("span", { class: "ev", textContent: `⚑ ${c.markers.length}` }) : null,
+    c.favorite ? el("span", { class: "star", textContent: "★" }) : null);
+  th.id = "th-" + c.id;
+  return el("div", { class: "card", onclick: () => c.live ? toast("Still recording: it opens once the game is closed") : openPlayer(c) }, th,
+    el("div", { class: "info" }, el("div", { class: "title", textContent: c.title, title: c.name }),
+      el("div", { class: "meta", textContent: `${ago(c.mtime)} · ${size(c.size)}` })));
+}
+$$("#kind button").forEach(b => b.onclick = () => { kind = b.dataset.kind; $$("#kind button").forEach(x => x.classList.toggle("on", x === b)); renderClips(); });
+$("#gamefilter").onchange = renderClips;
+$("#cq").oninput = renderClips;
+$("#openfolder").onclick = $("#openfolder2").onclick = () => act("/api/open-folder", {});
+
+/* thumbnails + durations, made by the browser one at a time and cached by the app */
+let thumbBusy = false, thumbTodo = [];
+function thumbQueue(items) { const have = new Set(thumbTodo.map(c => c.id)); thumbTodo.push(...items.filter(c => !have.has(c.id))); if (!thumbBusy) nextThumb(); }
+async function nextThumb() {
+  const c = thumbTodo.shift();
+  if (!c) { thumbBusy = false; return; }
+  thumbBusy = true;
+  try { await makeThumb(c); } catch (e) {}
+  setTimeout(nextThumb, 50);
+}
+function makeThumb(c) {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.muted = true; v.preload = "auto"; v.src = `/media/${c.id}?t=${TOKEN}`;
+    const done = () => { v.removeAttribute("src"); v.load(); };
+    const timer = setTimeout(() => { done(); reject("timeout"); }, 15000);
+    v.onloadedmetadata = () => {
+      if (isFinite(v.duration) && c.duration == null) { c.duration = v.duration; api("/api/clip/update", { id: c.id, duration: Math.round(v.duration * 10) / 10 }).catch(() => {}); }
+      if (c.thumb) { clearTimeout(timer); done(); resolve(); return; }
+      v.currentTime = Math.min(v.duration * 0.3 || 1, 12);
+    };
+    v.onseeked = () => {
+      const cv = document.createElement("canvas"); cv.width = 384; cv.height = 216;
+      const ctx = cv.getContext("2d"), r = Math.min(384 / v.videoWidth, 216 / v.videoHeight);
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 384, 216);
+      const w = v.videoWidth * r, h = v.videoHeight * r; ctx.drawImage(v, (384 - w) / 2, (216 - h) / 2, w, h);
+      cv.toBlob(async blob => {
+        clearTimeout(timer); done();
+        try {
+          await fetch(`/api/thumb?id=${c.id}`, { method: "POST", body: blob, headers: { "X-OBSPlayed-Token": TOKEN, "Content-Type": "image/jpeg" } });
+          c.thumb = true;
+          const th = document.getElementById("th-" + c.id);
+          if (th) { th.style.backgroundImage = `url("/thumb/${c.id}?t=${TOKEN}&v=${Date.now()}")`; if (c.duration && !th.querySelector(".len")) th.append(el("span", { class: "len", textContent: clock(c.duration) })); }
+        } catch (e) {}
+        resolve();
+      }, "image/jpeg", 0.82);
+    };
+    v.onerror = () => { clearTimeout(timer); done(); reject("error"); };
+  });
+}
+
+/* ---------- player ---------- */
+const video = $("#video");
+function openPlayer(c) {
+  current = c; sel = [null, null];
+  $("#player").classList.add("on");
+  $("#ptitle").textContent = c.title;
+  $("#psub").textContent = `${c.game} · ${new Date(c.mtime * 1000).toLocaleString()} · ${size(c.size)}`;
+  video.src = `/media/${c.id}?t=${TOKEN}`;
+  video.play().catch(() => {});
+  $("#fav").textContent = c.favorite ? "★ Favorite" : "☆ Favorite";
+  const evs = $("#events");
+  evs.replaceChildren(...(c.markers.length ? c.markers.map(m => el("div", { class: "event", onclick: () => seek(m.offset - 3) },
+    el("span", { class: "at", textContent: clock(m.offset) }), el("div", {}, el("div", { textContent: m.label }), m.detail ? el("div", { class: "d", textContent: m.detail }) : null)))
+    : [el("div", { class: "note", textContent: c.kind === "session" ? "No kills were detected in this recording. Press your highlight hotkey while playing to mark moments." : "Kills and marks inside this clip show up here." })]));
+  $("#nev").textContent = c.markers.length || "";
+  updateSel(); drawTimeline();
+}
+function closePlayer() { $("#player").classList.remove("on"); video.pause(); video.removeAttribute("src"); video.load(); current = null; }
+function seek(t) { video.currentTime = Math.max(0, t); video.play().catch(() => {}); }
+$("#back").onclick = () => { closePlayer(); loadClips(); };
+function dur() { return isFinite(video.duration) && video.duration > 0 ? video.duration : (current?.duration || 0); }
+function drawTimeline() {
+  const tl = $("#tl"), d = dur();
+  tl.replaceChildren();
+  if (!current || !d) return;
+  for (const h of current.highlights || []) tl.append(el("div", { class: "hl", style: `left:${h.start / d * 100}%;width:${(h.end - h.start) / d * 100}%`, title: h.title }));
+  if (sel[0] != null || sel[1] != null) { const a = sel[0] ?? 0, b = sel[1] ?? d; tl.append(el("div", { class: "sel", style: `left:${a / d * 100}%;width:${Math.max(0, b - a) / d * 100}%` })); }
+  for (const m of current.markers) tl.append(el("div", { class: "mk" + (m.label === "Manual" || m.label === "Highlight" ? " manual" : ""), style: `left:${m.offset / d * 100}%`, title: `${clock(m.offset)} ${m.label}` }));
+  tl.append(el("div", { class: "head", id: "phead", style: `left:${video.currentTime / d * 100}%` }));
+}
+$("#tl").onclick = e => { const r = e.currentTarget.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * dur()); };
+video.ontimeupdate = () => { const h = $("#phead"), d = dur(); if (h && d) h.style.left = video.currentTime / d * 100 + "%"; };
+video.onloadedmetadata = drawTimeline;
+function updateSel() {
+  const [a, b] = sel, ok = a != null && b != null && b - a >= 1;
+  $("#seltxt").textContent = a == null && b == null ? "Pick a start and an end to save a clip" : `${clock(a ?? 0)} → ${clock(b ?? dur())}` + (ok ? ` (${Math.round(b - a)} s)` : "");
+  const ff = state?.app?.ffmpeg;
+  $("#savesel").disabled = !ok || !ff;
+  $("#trimnote").replaceChildren();
+  if (!ff && ok) $("#trimnote").append("Saving clips needs ffmpeg. ",
+    state?.app?.installing_ffmpeg ? "Installing…" : el("button", { textContent: "Install ffmpeg", onclick: () => act("/api/install-ffmpeg", {}).then(() => toast("Installing ffmpeg in the background…")) }));
+  drawTimeline();
+}
+$("#setin").onclick = () => { sel[0] = video.currentTime; if (sel[1] != null && sel[1] <= sel[0]) sel[1] = null; updateSel(); };
+$("#setout").onclick = () => { sel[1] = video.currentTime; if (sel[0] != null && sel[0] >= sel[1]) sel[0] = null; updateSel(); };
+$("#savesel").onclick = async () => {
+  const [a, b] = sel; $("#savesel").disabled = true; $("#savesel").textContent = "Saving…";
+  const r = await act("/api/clip/trim", { id: current.id, start: a, end: b, title: $("#ptitle").textContent.trim() });
+  $("#savesel").textContent = "Save clip";
+  if (r) { toast(`Saved ${r.name}`); sel = [null, null]; updateSel(); clipsKey = ""; }
+};
+$("#fav").onclick = async () => { current.favorite = !current.favorite; await act("/api/clip/update", { id: current.id, favorite: current.favorite }); $("#fav").textContent = current.favorite ? "★ Favorite" : "☆ Favorite"; };
+$("#reveal").onclick = () => act("/api/clip/reveal", { id: current.id });
+$("#del").onclick = async () => {
+  if (!confirm(`Move "${current.title}" to the Recycle Bin?`)) return;
+  const id = current.id; closePlayer();
+  if (await act("/api/clip/delete", { id }) !== undefined) { toast("Moved to the Recycle Bin"); loadClips(true); }
+};
+$("#ptitle").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } };
+$("#ptitle").onblur = () => { const t = $("#ptitle").textContent.trim(); if (current && t && t !== current.title) { current.title = t; api("/api/clip/update", { id: current.id, title: t }).catch(e => toast(e.message, true)); clipsKey = ""; } };
+document.addEventListener("keydown", e => {
+  if (!current || e.target.isContentEditable || e.target.tagName === "INPUT") return;
+  if (e.key === "[") $("#setin").click(); else if (e.key === "]") $("#setout").click();
+  else if (e.key === "Escape") $("#back").click();
+  else if (e.key === " ") { e.preventDefault(); video.paused ? video.play() : video.pause(); }
+  else if (e.key === "ArrowLeft") video.currentTime -= 5; else if (e.key === "ArrowRight") video.currentTime += 5;
+});
+
+/* ---------- games ---------- */
+function seg(items, current, onPick, modeAttr) {
+  const s = el("div", { class: "seg" });
+  for (const [v, label, title] of items) s.append(el("button", { class: v === current ? "on" : "", textContent: label, title: title || "", data: modeAttr ? { mode: v } : {}, onclick: () => onPick(v) }));
+  return s;
+}
+let lastGames = "", lastDefault = "";
+function renderGames() {
+  if (state.default_mode !== lastDefault) { lastDefault = state.default_mode; $("#default").replaceWith(Object.assign(seg(MODES, lastDefault, m => act("/api/default", { mode: m }), true), { id: "default" })); }
+  const f = $("#filter").value.trim().toLowerCase(), playing = (state.status || {}).game;
+  const key = JSON.stringify([state.games, f, playing, gview]);
+  $("#ngames").textContent = state.games.length || "";
+  $("#dbcount").textContent = state.db.ready ? `${state.db.count.toLocaleString()} games` : "downloading game list…";
+  const scan = $("#scan"); scan.disabled = !!state.scanning || !state.db.ready; scan.textContent = state.scanning ? "Scanning…" : "Scan PC";
+  if (key === lastGames) return;
+  lastGames = key;
+  const games = state.games.filter(g => (!f || g.name.toLowerCase().includes(f)) && (gview === "all" || g.installed || g.name === playing))
+    .sort((a, b) => (b.name === playing) - (a.name === playing) || (b.last_played || b.added || 0) - (a.last_played || a.added || 0));
+  $("#gcount").textContent = state.games.length || "";
+  const list = $("#games");
+  if (!games.length) { list.replaceChildren(el("div", { class: "empty", textContent: state.games.length ? "No match" : "Games you play show up here automatically." })); return; }
+  list.replaceChildren(...games.map(g => el("div", { class: "game" + (g.name === playing ? " playing" : "") },
+    icon(g.icon, g.name),
+    el("div", { style: "min-width:0" }, el("div", { class: "name", title: g.name }, g.name, g.kills ? el("span", { class: "badge", textContent: "KILLS", title: "Automatic kill detection" }) : null),
+      el("div", { class: "meta", textContent: [SOURCE[g.source], g.name === playing ? "playing now" : ago(g.last_played), playtime(g.playtime)].filter(Boolean).join(" · "), title: (g.exes || []).join(", ") })),
+    el("button", { class: "x", textContent: "×", title: "Remove (you'll be asked again next time)", onclick: () => act("/api/remove", { name: g.name }) }),
+    seg(MODES, g.mode, m => act("/api/mode", { name: g.name, mode: m }), true))));
+}
+$("#filter").oninput = () => { lastGames = ""; renderGames(); };
+$("#scan").onclick = () => act("/api/scan", {});
+$$("#gview button").forEach(b => b.onclick = () => { gview = b.dataset.view; $$("#gview button").forEach(x => x.classList.toggle("on", x === b)); lastGames = ""; renderGames(); });
+let searchTimer = null;
+$("#q").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(search, 150); };
+async function search() {
+  const q = $("#q").value.trim(), out = $("#results");
+  if (q.length < 2) { out.replaceChildren(); return; }
+  const rows = [], reset = () => { $("#q").value = ""; out.replaceChildren(); };
+  if (/\.exe$/i.test(q) || !state.db.ready) {
+    const exe = q.toLowerCase().endsWith(".exe") ? q : q + ".exe";
+    rows.push(el("div", { class: "result" }, icon(null, exe), el("div", { textContent: `Custom game: ${exe}` }),
+      el("button", { textContent: "Add", onclick: () => { act("/api/add", { exe, name: exe.replace(/\.exe$/i, "") }); reset(); } })));
+  }
+  try {
+    for (const r of await api("/api/search?q=" + encodeURIComponent(q)))
+      rows.push(el("div", { class: "result" }, icon(r.icon, r.name), el("div", {}, r.name, r.kills ? el("span", { class: "badge", textContent: "KILLS" }) : null),
+        r.added ? el("span", { class: "done", textContent: "added" }) : el("button", { textContent: "Add", onclick: () => { act("/api/add", { id: r.id }); reset(); } })));
+  } catch (e) { toast(e.message, true); }
+  if (!rows.length) rows.push(el("div", { class: "done", textContent: "No game found. Type its .exe name to add it." }));
+  out.replaceChildren(...rows);
+}
+
+/* ---------- settings ---------- */
+const PREFS = [
+  ["capture", "Capture", [["game", "Game window"], ["screen", "Whole screen"]], { game: "Only the game, nothing else on your screen.", screen: "The whole monitor: use this if a game's anti-cheat blocks game capture (black video)." }],
+  ["audio", "Audio", [["game", "Game"], ["game_mic", "Game + mic"], ["all", "All PC sound"]], { game: "Only the game's sound: no Discord, music or notifications.", game_mic: "The game's sound and your microphone.", all: "Everything you hear, plus your microphone." }],
+  ["mic_mono", "Microphone in mono", [[true, "On"], [false, "Off"]], { true: "Your voice in both ears (for single-input mics/interfaces).", false: "Keep the mic as stereo." }],
+  ["quality", "Quality", [["small", "Small"], ["balanced", "Balanced"], ["high", "High"], ["max", "Max"]], { small: "Smaller files.", balanced: "Good quality, moderate size.", high: "Great quality (recommended).", max: "Best quality, big files." }],
+  ["fps", "Frame rate", [[30, "30"], [60, "60"]], { 30: "30 fps, smaller files.", 60: "60 fps, smooth (recommended for games)." }],
+  ["clip_length", "Clip length", [[15, "15 s"], [30, "30 s"], [60, "60 s"], [120, "2 min"]], { "": "How much is kept before a highlight in Clips mode." }],
+  ["hotkey", "Highlight hotkey", [["F8", "F8"], ["F9", "F9"], ["F10", "F10"], ["Ctrl+F8", "Ctrl+F8"], ["off", "Off"]], { "": "Press it in game to save a clip (Clips mode) or mark the moment (Record mode)." }],
+  ["autostart", "Start with Windows", [[true, "On"], [false, "Off"]], { "": "Starts in the tray, so games are recorded without opening anything." }],
+];
+let lastPrefs = "";
+function renderSettings() {
+  const p = state.prefs || {}, q = (state.status || {}).quality || {}, a = state.app || {};
+  const key = JSON.stringify([p, q, a.ffmpeg, a.installing_ffmpeg, a.folder]);
+  $("#log").textContent = (a.log || []).join("\n");
+  if (key === lastPrefs) return;
+  lastPrefs = key;
+  $("#prefs").replaceChildren(...PREFS.map(([k, label, opts, why]) => el("div", { class: "pref" }, el("label", { textContent: label }),
+    seg(opts, p[k], v => act("/api/pref", { key: k, value: v })), el("div", { class: "why", textContent: why[String(p[k])] ?? why[""] ?? "" }))));
+  $("#recinfo").textContent = [q.resolution && q.resolution.replace("x", "×"), q.fps && `${q.fps} fps`, q.encoder].filter(Boolean).join(" · ");
+  $("#folder").textContent = a.folder || "";
+  $("#version").textContent = a.version ? "v" + a.version : "";
+  $("#ffmpeg").replaceChildren(a.ffmpeg ? "ffmpeg found ✓" : a.installing_ffmpeg ? "Installing ffmpeg…" :
+    el("button", { textContent: "Install ffmpeg", onclick: () => act("/api/install-ffmpeg", {}).then(() => toast("Installing ffmpeg in the background…")) }));
+}
+
+/* ---------- refresh ---------- */
+let wasRecording = false;
+async function refresh(force) {
+  try {
+    state = await api("/api/state");
+    if (pageRev === null) pageRev = state.page_rev; else if (state.page_rev !== pageRev) return location.reload();
+    if (force) lastGames = "";
+    renderLive(); renderGames(); renderSettings();
+    const busy = state.app.recording || state.app.replay;
+    if (wasRecording && !busy) setTimeout(() => loadClips(), 4000);  // a recording just finished
+    wasRecording = busy;
+  } catch (e) {
+    $("#live .what").textContent = "OBSPlayed is not running"; $("#live .sub").textContent = "Start it from the Start menu"; $("#live").className = "live off";
+  }
+}
+refresh(true); loadClips();
+if (/^#(games|settings)$/.test(location.hash)) show(location.hash.slice(1));
+setInterval(refresh, 2000);
+setInterval(() => { if ($("#v-clips").classList.contains("on") && !current) loadClips(); }, 10000);
+setInterval(() => { if (state) renderLive(); }, 1000);
+</script>
+</body>
+</html>

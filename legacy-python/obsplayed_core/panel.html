@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OBSPlayed</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #17181d; --panel: #1f2027; --card: #262832; --card-hi: #2e3140; --line: #34374a;
+    --text: #e8e9ee; --muted: #9a9eb0; --faint: #6c7086;
+    --accent: #3b82f6; --rec: #ef4444; --clip: #f59e0b; --ok: #22c55e;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.4 "Segoe UI", system-ui, sans-serif; }
+  body { padding: 10px; display: flex; flex-direction: column; gap: 10px; min-width: 240px; overflow-x: hidden; }
+  .game, .result, h2, #status, .seg, .chips { user-select: none; }
+  h2 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 6px; display: flex; justify-content: space-between; align-items: baseline; }
+  h2 small { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--faint); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
+
+  /* status */
+  #status { display: flex; align-items: center; gap: 10px; }
+  #status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); flex: none; }
+  #status.rec .dot { background: var(--rec); box-shadow: 0 0 0 4px rgba(239,68,68,.18); animation: pulse 1.6s infinite; }
+  #status.clip .dot { background: var(--clip); box-shadow: 0 0 0 4px rgba(245,158,11,.18); }
+  #status.idle .dot { background: var(--ok); }
+  @keyframes pulse { 50% { opacity: .45; } }
+  #status .what { font-weight: 600; }
+  #status .sub { color: var(--muted); font-size: 12px; }
+  #status .timer { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+  #ask { display: none; border-color: var(--accent); background: linear-gradient(180deg, rgba(59,130,246,.12), var(--panel)); }
+  #ask.show { display: block; }
+  #ask .title { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .choices button { padding: 8px 4px; }
+
+  button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line);
+    border-radius: 6px; cursor: pointer; }
+  button:hover { background: var(--card-hi); }
+  button.primary { border-color: var(--accent); }
+
+  /* segmented mode picker */
+  .seg { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 2px; gap: 2px; width: 100%; }
+  .seg button { border: 0; background: transparent; padding: 4px 6px; border-radius: 4px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .seg button:hover { color: var(--text); background: var(--card); }
+  .seg button.on { color: #fff; background: var(--card-hi); }
+  .seg button.on[data-mode="full"] { background: rgba(239,68,68,.22); color: #fecaca; }
+  .seg button.on[data-mode="highlights"] { background: rgba(245,158,11,.22); color: #fde68a; }
+  .seg button.on[data-mode="ask"] { background: rgba(59,130,246,.22); color: #bfdbfe; }
+
+  /* search */
+  .search { position: relative; }
+  .search input { width: 100%; padding: 8px 10px 8px 30px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; font: inherit; outline: none; }
+  .search input:focus { border-color: var(--accent); }
+  .search svg { position: absolute; left: 9px; top: 9px; width: 14px; height: 14px; fill: var(--faint); }
+  #results { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow: auto; }
+  #results:empty { display: none; }
+
+  /* game rows */
+  .game { display: grid; grid-template-columns: 36px 1fr auto; gap: 8px 10px; align-items: center;
+    padding: 8px; border-radius: 6px; background: var(--card); }
+  .game + .game { margin-top: 6px; }
+  .game.playing { outline: 1px solid var(--ok); }
+  .game .icon { width: 36px; height: 36px; border-radius: 8px; background: var(--card-hi); object-fit: cover;
+    display: grid; place-items: center; font-weight: 700; color: var(--muted); font-size: 15px; overflow: hidden; }
+  .game .icon img { width: 100%; height: 100%; }
+  .game .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .game .meta { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .game .seg { grid-column: 1 / -1; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: .03em; padding: 1px 5px;
+    border-radius: 4px; background: rgba(34,197,94,.16); color: #86efac; margin-left: 6px; vertical-align: 1px; }
+  .x { background: none; border: 0; color: var(--faint); font-size: 16px; width: 24px; height: 24px; padding: 0; }
+  .x:hover { color: var(--text); background: var(--card-hi); }
+  .result { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; padding: 5px 6px; border-radius: 6px; }
+  .result:hover { background: var(--card); }
+  .result .icon { width: 28px; height: 28px; border-radius: 6px; font-size: 12px; }
+  .result button { padding: 3px 10px; font-size: 12px; }
+  .result .done { color: var(--faint); font-size: 12px; }
+  .empty { color: var(--faint); text-align: center; padding: 14px 6px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .toolbar input { flex: 1 1 120px; min-width: 0; padding: 6px 8px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; font: inherit; outline: none; }
+  .chips { display: flex; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px; gap: 2px; }
+  .chips button { border: 0; background: transparent; color: var(--muted); padding: 3px 8px; font-size: 12px; }
+  .chips button.on { background: var(--card-hi); color: var(--text); }
+  #scan { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+  #scan[disabled] { opacity: .6; cursor: default; }
+  .src { color: var(--faint); }
+  .pref { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 8px; }
+  .pref + .pref { margin-top: 6px; }
+  .pref label { color: var(--muted); font-size: 12px; }
+  .restart { display: none; margin-top: 8px; padding: 6px 8px; border-radius: 6px; font-size: 12px;
+    background: rgba(245,158,11,.14); color: #fde68a; border: 1px solid rgba(245,158,11,.35); }
+  .restart.show { display: block; }
+  .hint { color: var(--faint); font-size: 11.5px; margin-top: 6px; }
+  #err { display: none; color: #fca5a5; font-size: 12px; }
+</style>
+</head>
+<body>
+  <section id="status" class="idle">
+    <div class="dot"></div>
+    <div><div class="what">Starting…</div><div class="sub"></div></div>
+    <div class="timer"></div>
+  </section>
+
+  <section id="ask">
+    <div class="title"></div>
+    <div class="choices">
+      <button class="primary" data-answer="full">Whole session</button>
+      <button data-answer="highlights">Only highlights</button>
+      <button data-answer="off">Nothing</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>New games <small>when a game is played for the first time</small></h2>
+    <div class="seg" id="default"></div>
+  </section>
+
+  <section id="recording">
+    <h2>Recording <small id="recinfo"></small></h2>
+    <div class="pref"><label>Capture</label><div class="seg" data-pref="capture"></div></div>
+    <div class="pref"><label>Audio</label><div class="seg" data-pref="audio"></div></div>
+    <div class="pref"><label>Quality</label><div class="seg" data-pref="quality"></div></div>
+    <div class="pref"><label>Frame rate</label><div class="seg" data-pref="fps"></div></div>
+    <div class="hint" id="prefhint"></div>
+    <div class="restart" id="restart">Restart OBS to apply the new quality / frame rate.</div>
+  </section>
+
+  <section>
+    <h2>Add a game <small id="dbcount"></small></h2>
+    <div class="search">
+      <svg viewBox="0 0 24 24"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
+      <input id="q" placeholder="Search games, or type an .exe name" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <section>
+    <h2>Your games <small id="gcount"></small></h2>
+    <div class="toolbar">
+      <input id="filter" placeholder="Filter…" autocomplete="off">
+      <div class="chips" id="chips"><button data-view="all" class="on">All</button><button data-view="installed">Installed</button></div>
+      <button id="scan" title="Find games from Steam, Riot and Epic on this PC">Scan PC</button>
+    </div>
+    <div id="games"></div>
+    <div class="hint">Ask = ask me next time I play · Record = whole session with kills as chapters · Clips = replay buffer, saves kills and hotkey moments</div>
+  </section>
+  <div id="err"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const MODES = [["ask", "Ask"], ["full", "Record"], ["highlights", "Clips"], ["off", "Off"]];
+const MODE_TEXT = { full: "Recording whole session", highlights: "Saving highlight clips", off: "Not recording" };
+const $ = s => document.querySelector(s);
+let state = null, lastGames = "", lastDefault = "", view = "all", pageRev = null;
+const SOURCE = { steam: "Steam", riot: "Riot", epic: "Epic", discord: null, builtin: null, custom: "Custom" };
+
+async function api(path, body) {
+  const opts = { headers: { "X-OBSPlayed-Token": TOKEN } };
+  if (body) { opts.method = "POST"; opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
+  const r = await fetch(path, opts);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.status);
+  return data;
+}
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "data") Object.assign(e.dataset, v); else e[k] = v;
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+function icon(src, name) {
+  const box = el("div", { class: "icon" });
+  if (src) {
+    const img = el("img", { src, alt: "", loading: "lazy" });
+    img.onerror = () => { box.textContent = (name || "?")[0].toUpperCase(); };
+    box.append(img);
+  } else box.textContent = (name || "?")[0].toUpperCase();
+  return box;
+}
+function seg(current, onPick) {
+  const s = el("div", { class: "seg" });
+  for (const [m, label] of MODES) {
+    s.append(el("button", { class: m === current ? "on" : "", textContent: label, data: { mode: m },
+      title: { ask: "Ask me what to do", full: "Record the whole session", highlights: "Only save highlight clips", off: "Don't record" }[m],
+      onclick: () => onPick(m) }));
+  }
+  return s;
+}
+function ago(ts) {
+  if (!ts) return "never played";
+  const s = Date.now() / 1000 - ts;
+  if (s < 90) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  const d = Math.round(s / 86400);
+  return d === 1 ? "yesterday" : d < 30 ? `${d} days ago` : new Date(ts * 1000).toLocaleDateString();
+}
+function dur(s) {
+  if (!s) return null;
+  const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60);
+  return h ? `${h} h ${m} min` : `${m} min`;
+}
+function clock(s) {
+  s = Math.max(0, Math.floor(s));
+  const h = Math.floor(s / 3600), m = String(Math.floor(s % 3600 / 60)).padStart(2, "0"), x = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${m}:${x}` : `${m}:${x}`;
+}
+function showError(e) { const b = $("#err"); b.textContent = String(e.message || e); b.style.display = "block"; setTimeout(() => b.style.display = "none", 4000); }
+async function act(path, body) { try { await api(path, body); await refresh(true); } catch (e) { showError(e); } }
+
+function renderStatus() {
+  const st = state.status || {}, box = $("#status");
+  const playing = st.game;
+  box.className = !playing ? "idle" : st.mode === "full" ? "rec" : st.mode === "highlights" ? "clip" : "";
+  box.querySelector(".what").textContent = playing || "Watching for games";
+  box.querySelector(".sub").textContent = playing
+    ? (st.mode ? MODE_TEXT[st.mode] : "Waiting for your choice")
+    : (st.recording ? "Recording (started manually)" : st.replay ? "Replay buffer running" : "Start a game and OBSPlayed takes it from there");
+  box.querySelector(".timer").textContent = playing && st.since ? clock(Date.now() / 1000 - st.since) : "";
+  const ask = $("#ask"), pending = (st.asking || [])[0];
+  ask.classList.toggle("show", !!pending);
+  if (pending) { ask.querySelector(".title").textContent = `New game: ${pending}. What should I record?`; ask.dataset.game = pending; }
+}
+function renderDefault() {
+  const key = state.default_mode;
+  if (key === lastDefault) return;
+  lastDefault = key;
+  $("#default").replaceWith(Object.assign(seg(key, m => act("/api/default", { mode: m })), { id: "default" }));
+}
+const PREFS = {
+  capture: [["game", "Game only", "OBSPlayed's own scene: captures just the game window, nothing else on your screen"],
+            ["scene", "My scene", "Record whatever your current OBS scene shows"]],
+  audio: [["game", "Game", "Only the game's sound (no Discord, music or notifications)"],
+          ["game_mic", "Game + mic", "The game's sound and your microphone"],
+          ["all", "All PC sound", "Everything you hear, plus your microphone"]],
+  quality: [["keep", "OBS", "Keep my OBS output settings"], ["small", "Small", "Smaller files"],
+            ["balanced", "Balanced", "Good quality, moderate size"], ["high", "High", "Great quality (recommended)"],
+            ["max", "Max", "Best quality, big files"]],
+  fps: [[0, "OBS", "Keep OBS's frame rate"], [30, "30", "30 fps"], [60, "60", "60 fps (recommended for games)"]],
+};
+const PREF_HINT = {
+  capture: { game: "Captures only the game window, then switches back to your scene after.", scene: "Records your current OBS scene as it is." },
+  audio: { game: "Game sound only. Discord, music and notifications are left out.", game_mic: "Game sound and your microphone.", all: "Everything on your PC plus your microphone." },
+};
+let lastPrefs = "";
+function renderPrefs() {
+  const p = state.prefs || {}, q = (state.status || {}).quality || {};
+  const key = JSON.stringify([p, q]);
+  if (key === lastPrefs) return;
+  lastPrefs = key;
+  document.querySelectorAll("[data-pref]").forEach(box => {
+    const name = box.dataset.pref;
+    box.replaceChildren(...PREFS[name].map(([value, label, title]) => el("button", {
+      class: value === p[name] ? "on" : "", textContent: label, title,
+      onclick: () => act("/api/pref", { key: name, value }) })));
+  });
+  const info = [q.resolution && q.resolution.replace("x", "×"), q.fps && `${q.fps} fps`, q.encoder].filter(Boolean).join(" · ");
+  $("#recinfo").textContent = info;
+  $("#prefhint").textContent = [PREF_HINT.capture[p.capture], PREF_HINT.audio[p.audio]].filter(Boolean).join(" ");
+  $("#restart").classList.toggle("show", !!q.restart_required);
+}
+function renderGames() {
+  const f = $("#filter").value.trim().toLowerCase();
+  const playing = (state.status || {}).game;
+  const key = JSON.stringify([state.games, f, playing, view]);
+  if (key === lastGames) return;
+  lastGames = key;
+  const games = state.games.filter(g => (!f || g.name.toLowerCase().includes(f)) && (view === "all" || g.installed || g.name === playing))
+    .sort((a, b) => (b.name === playing) - (a.name === playing) || (b.last_played || b.added || 0) - (a.last_played || a.added || 0));
+  $("#gcount").textContent = state.games.length ? `${state.games.length}` : "";
+  const list = $("#games");
+  list.replaceChildren();
+  if (!games.length) {
+    list.append(el("div", { class: "empty", textContent: state.games.length ? "No match" : "Games you play show up here automatically. You can also add them above." }));
+    return;
+  }
+  for (const g of games) {
+    const meta = [SOURCE[g.source] || null, g.name === playing ? "playing now" : ago(g.last_played),
+      dur(g.playtime), g.sessions ? `${g.sessions} session${g.sessions > 1 ? "s" : ""} with OBSPlayed` : null].filter(Boolean).join(" · ");
+    list.append(el("div", { class: "game" + (g.name === playing ? " playing" : "") },
+      icon(g.icon, g.name),
+      el("div", {}, el("div", { class: "name", title: g.name }, g.name, g.kills ? el("span", { class: "badge", textContent: "KILLS", title: "Automatic kill detection" }) : null),
+                    el("div", { class: "meta", textContent: meta, title: (g.exes || []).join(", ") })),
+      el("button", { class: "x", textContent: "×", title: "Remove from list (you'll be asked again next time)",
+        onclick: () => act("/api/remove", { name: g.name }) }),
+      seg(g.mode, m => act("/api/mode", { name: g.name, mode: m }))));
+  }
+}
+function render() { renderStatus(); renderDefault(); renderPrefs(); renderGames();
+  const scan = $("#scan"); scan.disabled = !!state.scanning || !state.db.ready; scan.textContent = state.scanning ? "Scanning…" : "Scan PC";
+  $("#dbcount").textContent = state.db.ready ? `${state.db.count.toLocaleString()} games` : "downloading game list…"; }
+
+async function refresh(force) {
+  try {
+    state = await api("/api/state");
+    if (pageRev === null) pageRev = state.page_rev;
+    else if (state.page_rev !== pageRev) return location.reload();  // panel was updated
+    if (force) lastGames = ""; render();
+  }
+  catch (e) { $("#status .what").textContent = "OBSPlayed is not running"; $("#status .sub").textContent = "Load obsplayed.py in Tools > Scripts"; $("#status").className = ""; }
+}
+
+let searchTimer = null;
+$("#q").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(search, 150); });
+async function search() {
+  const q = $("#q").value.trim(), out = $("#results");
+  if (q.length < 2) { out.replaceChildren(); return; }
+  const rows = [];
+  if (/\.exe$/i.test(q) || !state.db.ready) {
+    const exe = q.toLowerCase().endsWith(".exe") ? q : q + ".exe";
+    rows.push(el("div", { class: "result" }, icon(null, exe), el("div", { textContent: `Custom game: ${exe}` }),
+      el("button", { textContent: "Add", onclick: () => { act("/api/add", { exe, name: exe.replace(/\.exe$/i, "") }); $("#q").value = ""; out.replaceChildren(); } })));
+  }
+  try {
+    for (const r of await api("/api/search?q=" + encodeURIComponent(q))) {
+      rows.push(el("div", { class: "result" }, icon(r.icon, r.name),
+        el("div", { class: "name", title: r.name }, r.name, r.kills ? el("span", { class: "badge", textContent: "KILLS" }) : null),
+        r.added ? el("span", { class: "done", textContent: "added" })
+                : el("button", { textContent: "Add", onclick: () => { act("/api/add", { id: r.id }); $("#q").value = ""; out.replaceChildren(); } })));
+    }
+  } catch (e) { showError(e); }
+  if (!rows.length) rows.push(el("div", { class: "empty", textContent: "No game found. Type its .exe name to add it." }));
+  out.replaceChildren(...rows);
+}
+$("#filter").addEventListener("input", () => { lastGames = ""; renderGames(); });
+$("#scan").onclick = () => act("/api/scan", {});
+document.querySelectorAll("#chips button").forEach(b => b.onclick = () => {
+  view = b.dataset.view; document.querySelectorAll("#chips button").forEach(x => x.classList.toggle("on", x === b)); renderGames(); });
+document.querySelectorAll("[data-answer]").forEach(b => b.onclick = () => act("/api/answer", { name: $("#ask").dataset.game, mode: b.dataset.answer }));
+
+refresh(true);
+setInterval(refresh, 2000);
+setInterval(() => { if (state) renderStatus(); }, 1000);
+</script>
+</body>
+</html>

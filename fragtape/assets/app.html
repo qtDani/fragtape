@@ -1,0 +1,1184 @@
+<!doctype html>
+<html lang="en" data-theme="__THEME__" __LOOK__>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fragtape</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E %3Cdefs%3E%3Cmask id=%22m%22%3E%3Crect width=%22100%22 height=%22100%22 fill=%22%23fff%22/%3E %3Ccircle cx=%2236%22 cy=%2258%22 r=%229%22/%3E%3Cpath d=%22M53 59 L67 54 L68 60 L54 63Z%22/%3E%3Cpath d=%22M38 75 Q48 81 60 74 L57 80 Q48 85 40 80Z%22/%3E%3C/mask%3E%3C/defs%3E %3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%2316181c%22/%3E %3Cg transform=%22translate(13 13) scale(.74)%22 fill=%22%23f2f2f2%22%3E %3Cpath mask=%22url(%23m)%22 d=%22M16 62 L21 44 L35 33 L53 31 L69 38 L79 54 L78 72 L66 86 L47 91 L29 85 L18 75Z%22/%3E %3Cpath d=%22M58 34 L64 26 L74 31 L69 39Z%22/%3E %3Cpath d=%22M69 28 Q74 14 86 14%22 fill=%22none%22 stroke=%22%23f2f2f2%22 stroke-width=%224.5%22 stroke-linecap=%22round%22/%3E %3Cpath fill=%22%23ff8a1c%22 d=%22M88 4 L90 11 L97 10 L91 15 L95 21 L88 18 L84 24 L84 16 L77 14 L84 11Z%22/%3E %3C/g%3E %3C/svg%3E">
+<style>
+  /* Sharp minimal (default) */
+  :root {
+    color-scheme: dark;
+    --bg: #0d0d0d; --side: #0d0d0d; --panel: #121212; --card: #171717; --card-hi: #222222; --line: #2a2a2a; --hover-line: #444;
+    --text: #eaeaea; --muted: #8a8a8a; --faint: #666666;
+    --accent: #ef4444; --on-text: #fff; --seg-on: var(--accent); --sel: #1a1a1a; --bar: 2px; --logo-bg: #1a1a1a;
+    --rec: #ef4444; --clip: #f59e0b; --ok: #22c55e;
+    --r-sm: 2px; --r-lg: 2px; --track: #333333; --thumb-r: 2px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 "Segoe UI", system-ui, sans-serif; }
+  body { display: grid; grid-template-columns: 210px 1fr; overflow: hidden; user-select: none; }
+  input, textarea { user-select: text; }
+  button { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; padding: 6px 12px; }
+  button:hover { background: var(--card-hi); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-text); }
+  button.primary:hover { filter: brightness(1.1); }
+  button.danger:hover { background: rgba(239,68,68,.2); border-color: rgba(239,68,68,.5); }
+  button[disabled] { opacity: .5; cursor: default; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0; }
+  h2 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px;
+       display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  h2 small { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--faint); }
+
+  /* sidebar */
+  aside { background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 16px 10px; gap: 4px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; padding: 0 8px 16px; }
+  .logo svg { width: 28px; height: 28px; flex: none; color: var(--text); }
+  nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: transparent; color: var(--muted); padding: 9px 10px; font-size: 14px; }
+  nav button svg { width: 18px; height: 18px; fill: currentColor; opacity: .85; }
+  nav button:hover { background: var(--card); color: var(--text); }
+  nav button.on { background: var(--sel); color: var(--text); box-shadow: inset var(--bar) 0 0 var(--accent); }
+  nav .count { margin-left: auto; font-size: 11px; color: var(--faint); }
+  .live { margin-top: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .live .row { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); flex: none; }
+  .live.rec .dot { background: var(--rec); box-shadow: 0 0 0 4px rgba(239,68,68,.18); animation: pulse 1.6s infinite; }
+  .live.clip .dot { background: var(--clip); box-shadow: 0 0 0 4px rgba(245,158,11,.18); }
+  .live.off .dot { background: var(--faint); }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .live .what { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live .sub { color: var(--muted); font-size: 12px; }
+  .live .timer { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+  .live button { width: 100%; padding: 6px; font-size: 12px; }
+
+  main { overflow: auto; position: relative; }
+  .view { display: none; padding: 22px 28px 40px; max-width: 1500px; }
+  .view.on { display: block; }
+  .head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .head .grow { flex: 1; }
+  .chips { display: inline-flex; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 3px; gap: 2px; }
+  .chips button { border: 0; background: transparent; color: var(--muted); padding: 5px 12px; font-size: 12.5px; }
+  .chips button.on { background: var(--card-hi); color: var(--text); }
+  select, .field { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 7px 10px; font: inherit; outline: none; }
+  .field:focus { border-color: var(--accent); }
+
+  /* clip grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--thumb, 250px), 1fr)); gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; cursor: pointer; transition: transform .12s, border-color .12s; }
+  .card:hover { transform: translateY(-2px); border-color: var(--hover-line); }
+  .thumb { aspect-ratio: 16/9; background: #0b0c0f center/cover no-repeat; position: relative; }
+  .thumb .len { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.75); padding: 1px 6px; border-radius: var(--r-sm); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .thumb .kind { position: absolute; left: 6px; top: 6px; font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 2px 6px; border-radius: var(--r-sm); }
+  .kind.clip { background: rgba(245,158,11,.9); color: #1c1203; }
+  .kind.session { background: rgba(239,68,68,.9); color: #fff; }
+  .kind.live { background: #ef4444; color: #fff; animation: pulse 1.6s infinite; }
+  .thumb .ev { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.75); padding: 1px 6px; border-radius: var(--r-sm); font-size: 11.5px; }
+  .thumb .star { position: absolute; right: 6px; top: 4px; font-size: 16px; color: #fde047; text-shadow: 0 1px 3px #000; }
+  .card .info { padding: 9px 11px 11px; }
+  .card .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .meta { color: var(--muted); font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .group-title { display: flex; align-items: center; gap: 10px; margin: 26px 0 12px; font-weight: 600; font-size: 15px; }
+  .group-title:first-child { margin-top: 0; }
+  .group-title small { color: var(--faint); font-weight: 400; font-size: 12px; }
+  .icon { width: 28px; height: 28px; border-radius: var(--r-lg); background: var(--card-hi); display: grid; place-items: center; font-weight: 700; color: var(--muted); overflow: hidden; flex: none; }
+  .icon img { width: 100%; height: 100%; object-fit: cover; }
+  .empty { color: var(--faint); text-align: center; padding: 70px 20px; font-size: 14px; }
+  .empty b { display: block; color: var(--text); font-size: 17px; margin-bottom: 6px; }
+
+  /* player */
+  #player { position: absolute; inset: 0; background: var(--bg); display: none; padding: 18px 28px 28px; overflow: auto; }
+  #player.on { display: block; }
+  #player .top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  #player .top .ttl { font-size: 18px; font-weight: 600; outline: none; border-radius: var(--r-sm); padding: 2px 6px; min-width: 60px; user-select: text; }
+  #player .top .ttl:focus { background: var(--panel); box-shadow: 0 0 0 1px var(--accent); }
+  #player .top .sub { color: var(--muted); }
+  .stage { display: grid; grid-template-columns: 1fr 280px; gap: 18px; align-items: start; }
+  video { width: 100%; max-height: calc(100vh - 230px); background: #000; border-radius: var(--r-lg); display: block; }
+  /* video player */
+  .vp { position: relative; background: #000; border-radius: var(--r-lg); overflow: hidden; user-select: none; }
+  .vp video { width: 100%; max-height: calc(100vh - 190px); display: block; border-radius: 0; cursor: pointer; }
+  .vp:fullscreen video { max-height: none; height: 100vh; }
+  .vp svg { width: 20px; height: 20px; display: block; fill: currentColor; }
+  .vp-big { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); width: 64px; height: 64px; padding: 0; border: 0;
+    border-radius: var(--r-lg); background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; }
+  .vp-big svg { width: 34px; height: 34px; }
+  .vp-big:hover { background: var(--accent); }
+  .vp.playing .vp-big { display: none; }
+  .vp-ctrl { position: absolute; left: 0; right: 0; bottom: 0; padding: 34px 14px 8px; background: linear-gradient(transparent, rgba(0,0,0,.82) 60%);
+    transition: opacity .2s; }
+  .vp.idle .vp-ctrl { opacity: 0; }
+  .vp.idle { cursor: none; }
+  .vp-lane { position: relative; height: 22px; margin-bottom: 3px; }
+  .vp-pin { position: absolute; bottom: 0; transform: translateX(-50%); width: 20px; height: 20px; padding: 0; border: 0; border-radius: var(--r-sm);
+    background: rgba(12,12,12,.85); box-shadow: 0 0 0 1px rgba(255,255,255,.18); display: grid; place-items: center; color: var(--c); cursor: pointer; }
+  .vp-pin:hover { box-shadow: 0 0 0 2px var(--c); z-index: 2; }
+  .vp-pin svg { width: 14px; height: 14px; }
+  .vp-pin b { font: 800 11px/1 "Segoe UI", sans-serif; }
+  .vp-pin::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: 4px; background: var(--c); opacity: .7; }
+  .vp-bar { position: relative; height: 16px; cursor: pointer; display: flex; align-items: center; }
+  .vp-track { position: relative; width: 100%; height: 4px; background: rgba(255,255,255,.22); transition: height .1s; }
+  .vp-bar:hover .vp-track, .vp.drag .vp-track { height: 7px; }
+  .vp-buf { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,.22); }
+  .vp-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
+  .vp-hl { position: absolute; top: 0; bottom: 0; background: rgba(245,158,11,.55); }
+  .vp-knob { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: #fff; border-radius: var(--thumb-r, 2px); opacity: 0; pointer-events: none; }
+  .vp-bar:hover .vp-knob, .vp.drag .vp-knob { opacity: 1; }
+  .vp-sel { position: absolute; top: 0; bottom: 0; border: 2px solid #fff; background: rgba(255,255,255,.14); display: none; pointer-events: none; }
+  .vp-sel.on { display: block; }
+  .vp-sel i { position: absolute; top: -3px; bottom: -3px; width: 8px; background: #fff; cursor: ew-resize; pointer-events: auto; }
+  .vp-sel .h1 { left: -5px; } .vp-sel .h2 { right: -5px; }
+  .vp-hover { position: absolute; bottom: 62px; width: 196px; transform: translateX(-50%); display: none; pointer-events: none; text-align: center; z-index: 3; }
+  .vp-hover canvas { width: 192px; height: 108px; display: block; border: 2px solid #fff; background: #111; }
+  .vp-hover span { display: inline-block; margin-top: 4px; padding: 2px 7px; background: rgba(0,0,0,.85); color: #fff; font: 600 12px "Segoe UI", sans-serif; }
+  .vp-hover.on { display: block; }
+  .vp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 4px; color: #fff; white-space: nowrap; }
+  @media (max-width: 1150px) { .stage { grid-template-columns: 1fr; } .side { max-height: none; } }
+  .vp-row > * { flex-shrink: 0; }
+  .vp-btn { background: none; border: 0; color: #fff; padding: 6px; border-radius: var(--r-sm); display: grid; place-items: center; }
+  .vp-btn:hover { background: rgba(255,255,255,.14); }
+  .vp-speed { font: 600 12.5px "Segoe UI", sans-serif; min-width: 40px; }
+  .vp-vol { display: flex; align-items: center; }
+  .vp .vp-vol input[type=range] { width: 0; opacity: 0; transition: width .15s, opacity .15s; --track: rgba(255,255,255,.3); }
+  .vp .vp-vol:hover input[type=range], .vp .vp-vol input[type=range]:focus { width: 80px; opacity: 1; margin: 0 6px 0 2px; }
+  .vp-time { font: 12.5px "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; margin-left: 6px; opacity: .9; }
+  .vp-trim { display: flex; align-items: center; gap: 6px; font: 12.5px "Segoe UI", sans-serif; }
+  .vp-left, .vp-right { display: flex; align-items: center; gap: 6px; }
+  .vp-right { margin-left: auto; }
+  .vp-trim .rng { font-variant-numeric: tabular-nums; padding: 4px 8px; border: 1px solid rgba(255,255,255,.35); }
+  .vp-trim button { padding: 5px 10px; font-size: 12.5px; }
+  .vp-trim button.vp-btn { padding: 6px; }
+  .event { align-items: center; }
+  .event .ico { width: 20px; height: 20px; display: grid; place-items: center; color: var(--c); }
+  .event .ico svg { width: 15px; height: 15px; fill: currentColor; }
+  .event .ico b { font: 800 11px/1 "Segoe UI", sans-serif; }
+  .timeline { position: relative; height: 34px; margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); cursor: pointer; }
+  .timeline .hl { position: absolute; top: 0; bottom: 0; background: rgba(245,158,11,.18); border-left: 1px solid rgba(245,158,11,.5); border-right: 1px solid rgba(245,158,11,.5); }
+  .timeline .sel { position: absolute; top: -1px; bottom: -1px; background: rgba(59,130,246,.25); border: 2px solid var(--accent); border-radius: var(--r-sm); pointer-events: none; }
+  .timeline .mk { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--rec); box-shadow: 0 0 0 2px var(--panel); }
+  .timeline .mk.manual { background: var(--accent); }
+  .timeline .head { position: absolute; top: -4px; bottom: -4px; width: 2px; background: #fff; margin: 0; pointer-events: none; }
+  .tools { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  .tools .t { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .tools .grow { flex: 1; }
+  .side { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px; max-height: calc(100vh - 120px); overflow: auto; }
+  .event { display: grid; grid-template-columns: 20px 44px 1fr; gap: 8px; padding: 7px 8px; border-radius: var(--r-sm); cursor: pointer; }
+  .event:hover { background: var(--card); }
+  .event .at { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .event .d { color: var(--faint); font-size: 12px; }
+  .note { color: var(--faint); font-size: 12px; margin-top: 8px; }
+
+  /* games + settings */
+  section.box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; margin-bottom: 14px; }
+  .seg { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 2px; gap: 2px; }
+  .seg button { border: 0; background: transparent; padding: 5px 12px; border-radius: var(--r-sm); color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .seg button:hover { color: var(--text); background: var(--card); }
+  .seg button.on { color: var(--on-text); background: var(--seg-on); }
+  .seg button.on[data-mode="full"] { background: rgba(239,68,68,.22); color: #fecaca; }
+  .seg button.on[data-mode="highlights"] { background: rgba(245,158,11,.22); color: #fde68a; }
+  .seg button.on[data-mode="ask"] { background: rgba(59,130,246,.22); color: #bfdbfe; }
+  .games { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; }
+  .game { display: grid; grid-template-columns: 40px 1fr auto; gap: 8px 12px; align-items: center; padding: 10px; border-radius: var(--r-lg); background: var(--card); }
+  .game.playing { outline: 1px solid var(--ok); }
+  .game .icon { width: 40px; height: 40px; border-radius: var(--r-lg); }
+  .game .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .game .meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .game .seg { grid-column: 1 / -1; width: 100%; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: var(--r-sm); background: rgba(34,197,94,.16); color: #86efac; margin-left: 6px; vertical-align: 1px; }
+  .x { background: none; border: 0; color: var(--faint); font-size: 17px; width: 26px; height: 26px; padding: 0; }
+  .x:hover { color: var(--text); background: var(--card-hi); }
+  .search { position: relative; max-width: 520px; }
+  .search input { width: 100%; padding-left: 32px; }
+  .search svg { position: absolute; left: 10px; top: 10px; width: 14px; height: 14px; fill: var(--faint); }
+  #results { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; max-width: 520px; max-height: 300px; overflow: auto; }
+  .result { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 5px 6px; border-radius: var(--r-sm); }
+  .result:hover { background: var(--card); }
+  .result button { padding: 3px 12px; font-size: 12px; }
+  .done { color: var(--faint); font-size: 12px; }
+  .pref { display: grid; grid-template-columns: 170px auto 1fr; align-items: center; gap: 14px; padding: 9px 0; border-top: 1px solid var(--line); }
+  .pref:first-of-type { border-top: 0; }
+  .pref label { color: var(--text); }
+  .pref .why { color: var(--faint); font-size: 12px; }
+  #ask { display: none; border-color: var(--accent); background: linear-gradient(180deg, rgba(59,130,246,.14), var(--panel)); margin-bottom: 16px; }
+  #ask.show { display: block; }
+  #ask .title { font-weight: 600; font-size: 15px; margin-bottom: 10px; }
+  #ask .choices { display: flex; gap: 8px; }
+  .log { font: 11.5px/1.5 Consolas, monospace; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px; max-height: 260px; overflow: auto; white-space: pre-wrap; user-select: text; }
+  .warn { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.35); color: #fde68a; border-radius: var(--r-lg); padding: 10px 12px; margin-bottom: 14px; }
+  h3 { font-size: 12.5px; font-weight: 600; color: var(--text); margin: 16px 0 2px; display: flex; gap: 8px; align-items: baseline; }
+  h3 small { color: var(--faint); font-weight: 400; }
+  .adv-note { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 9px 12px; color: var(--muted); font-size: 12.5px; display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+  .dim { opacity: .45; pointer-events: none; }
+  button.link { background: none; border: 0; color: var(--accent); padding: 0; font-size: 12px; letter-spacing: 0; text-transform: none; }
+  button.link:hover { text-decoration: underline; background: none; }
+  .numrow { display: flex; align-items: center; gap: 8px; }
+  .numrow input[type=number] { width: 110px; }
+  /* sliders: dark grey track, the filled part in the theme colour */
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 220px; height: 6px; margin: 0; outline: none; cursor: pointer;
+    border-radius: var(--r-sm); background: linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 50%) 100% no-repeat, var(--track); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: var(--thumb-r);
+    background: var(--accent); border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--accent); }
+  input[type=range]:hover::-webkit-slider-thumb { filter: brightness(1.15); }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px rgba(128,128,128,.35); }
+  .numrow .val { min-width: 70px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .seg button[disabled] { opacity: .35; cursor: default; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--card-hi); border: 1px solid var(--line); padding: 9px 16px; border-radius: var(--r-lg); display: none; z-index: 9; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  #toast.err { border-color: rgba(239,68,68,.6); color: #fecaca; }
+
+  /* OBS setup */
+  .obssetup { display: grid; gap: 6px; }
+  .obssetup b { font-size: 14px; }
+  .obsbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .obssetup .obsbtns { margin-top: 4px; }
+  .obsnote:empty { display: none; }
+  .obsrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  #obspath { font-family: var(--mono, ui-monospace, Consolas, monospace); font-size: 12.5px; word-break: break-all; }
+
+  /* settings tabs */
+  .tabs { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+  .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; margin-bottom: -1px;
+    padding: 9px 14px; color: var(--muted); font-size: 13.5px; }
+  .tabs button:hover { color: var(--text); background: none; }
+  .tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tab { display: none; }
+  .tab.on { display: block; }
+  html[data-theme="metro"] .tabs button { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; font-weight: 600; }
+  html[data-theme="metro"] .tabs button.on { background: var(--accent); color: #fff; }
+  html[data-theme="vista"] .tabs { border-bottom-color: #000; box-shadow: 0 1px 0 rgba(255,255,255,.1); }
+  html[data-theme="vista"] .tabs button { background: transparent; box-shadow: none; filter: none; border: 1px solid transparent; border-bottom: 0; border-radius: 4px 4px 0 0; margin: 0 2px -1px 0; }
+  html[data-theme="vista"] .tabs button:hover { background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.04) 50%, rgba(0,0,0,.1) 51%, rgba(255,255,255,.06)); border-color: rgba(255,255,255,.2); }
+  html[data-theme="vista"] .tabs button.on { color: #fff; border-color: rgba(120,200,255,.6); text-shadow: 0 0 6px rgba(150,220,255,.9);
+    background: linear-gradient(180deg, rgba(150,215,255,.45), rgba(60,140,210,.35) 50%, rgba(20,90,170,.45) 51%, rgba(80,170,240,.4));
+    box-shadow: 0 0 8px rgba(80,180,255,.45), inset 0 1px 0 rgba(255,255,255,.4); }
+
+  /* ---------- themes ---------- */
+  html[data-theme="win10dark"] {
+    --bg: #1f1f1f; --side: #191919; --panel: #262626; --card: #2b2b2b; --card-hi: #353535; --line: #3d3d3d; --hover-line: #5a5a5a;
+    --text: #ffffff; --muted: #a0a0a0; --faint: #7a7a7a; --accent: #0078d4; --sel: #2d2d2d; --bar: 4px; --logo-bg: #0078d4;
+    --r-sm: 0px; --r-lg: 0px; --track: #4a4a4a; --thumb-r: 0px;
+  }
+  html[data-theme="win10dark"] h1, html[data-theme="win10light"] h1 { font-weight: 300; font-size: 26px; }
+  html[data-theme="metro"] {
+    --bg: #111111; --side: #111111; --panel: #1a1a1a; --card: #1d1d1d; --card-hi: #262626; --line: #1d1d1d; --hover-line: #e81123;
+    --text: #ffffff; --muted: #9a9a9a; --faint: #777; --accent: #e81123; --sel: #e81123; --bar: 0px; --logo-bg: #e81123;
+    --r-sm: 0px; --r-lg: 0px; --track: #333333; --thumb-r: 0px;
+  }
+  html[data-theme="metro"] h1 { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
+  html[data-theme="metro"] section.box, html[data-theme="metro"] .card, html[data-theme="metro"] .live { border-color: transparent; }
+  html[data-theme="metro"] nav button.on { color: #fff; }
+  html[data-theme="win10light"] {
+    color-scheme: light;
+    --bg: #ffffff; --side: #f2f2f2; --panel: #f9f9f9; --card: #f2f2f2; --card-hi: #e5e5e5; --line: #d1d1d1; --hover-line: #0078d4;
+    --text: #000000; --muted: #5c5c5c; --faint: #767676; --accent: #0078d4; --sel: #e5e5e5; --bar: 4px; --logo-bg: #0078d4;
+    --r-sm: 0px; --r-lg: 0px; --track: #c8c8c8; --thumb-r: 0px;
+  }
+  html[data-theme="win10light"] .seg button.on[data-mode="full"] { background: #fde2e2; color: #b91c1c; }
+  html[data-theme="win10light"] .seg button.on[data-mode="highlights"] { background: #fdf0d5; color: #92400e; }
+  html[data-theme="win10light"] .seg button.on[data-mode="ask"] { background: #dbeafe; color: #1d4ed8; }
+  html[data-theme="win10light"] .badge { background: #dcfce7; color: #166534; }
+  html[data-theme="win10light"] .warn { color: #92400e; }
+  html[data-theme="win10light"] .thumb .len, html[data-theme="win10light"] .thumb .ev { color: #fff; }
+
+  /* Vista Aero: smoky glass, glossy two-tone controls, glowing blue selection */
+  html[data-theme="vista"] {
+    --bg: transparent; --side: rgba(255,255,255,.04); --panel: rgba(12,16,22,.72); --card: rgba(40,48,58,.75); --card-hi: rgba(70,84,100,.8);
+    --line: rgba(0,0,0,.85); --hover-line: rgba(120,200,255,.8);
+    --text: #ffffff; --muted: #b8c6d4; --faint: #8796a6; --accent: #3b9ae8; --sel: transparent; --bar: 0px; --logo-bg: transparent;
+    --r-sm: 3px; --r-lg: 6px; --track: #1a1f25; --thumb-r: 50%;
+    --gloss: linear-gradient(180deg, #6b7480, #454c55 50%, #30363d 51%, #4a525c);
+    --gloss-blue: linear-gradient(180deg, #a9dcff, #4aa3e6 50%, #1d77c9 51%, #5cb4f0);
+    background: radial-gradient(ellipse at 15% 0%, #2f7fb8 0%, #0b2a4a 40%, #04101f 100%) fixed;
+  }
+  html[data-theme="vista"] body { background: linear-gradient(115deg, transparent 20%, rgba(255,255,255,.05) 24%, transparent 30%) fixed; }
+  html[data-theme="vista"] aside { background: linear-gradient(180deg, rgba(80,110,140,.45), rgba(20,30,45,.55)); border-right: 1px solid #000; box-shadow: inset -1px 0 0 rgba(255,255,255,.12); }
+  html[data-theme="vista"] main { background: rgba(10,14,20,.6); }
+  html[data-theme="vista"] .logo { text-shadow: 0 0 10px rgba(255,255,255,.6); }
+  html[data-theme="vista"] .logo svg { filter: drop-shadow(0 0 5px rgba(255,255,255,.55)); }
+  html[data-theme="vista"] nav button { border: 1px solid transparent; margin-bottom: 2px; }
+  html[data-theme="vista"] nav button:hover { background: linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.04) 50%, rgba(0,0,0,.1) 51%, rgba(255,255,255,.06)); border-color: rgba(255,255,255,.25); }
+  html[data-theme="vista"] nav button.on { color: #fff; border-color: rgba(120,200,255,.6); box-shadow: 0 0 8px rgba(80,180,255,.45), inset 0 1px 0 rgba(255,255,255,.4);
+    background: linear-gradient(180deg, rgba(150,215,255,.45), rgba(60,140,210,.35) 50%, rgba(20,90,170,.45) 51%, rgba(80,170,240,.4)); }
+  html[data-theme="vista"] h1 { font-weight: 300; font-size: 24px; text-shadow: 0 0 12px rgba(140,210,255,.7); }
+  html[data-theme="vista"] button { background: var(--gloss); border-color: #0b0b0b; box-shadow: inset 0 1px 0 rgba(255,255,255,.35); color: #fff; }
+  html[data-theme="vista"] button:hover { filter: brightness(1.15); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 0 8px rgba(120,200,255,.5); }
+  html[data-theme="vista"] button.primary { background: var(--gloss-blue); border-color: #08315e; text-shadow: 0 1px 1px rgba(0,0,0,.5);
+    box-shadow: 0 0 8px rgba(80,170,255,.5), inset 0 1px 0 rgba(255,255,255,.5); }
+  html[data-theme="vista"] nav button, html[data-theme="vista"] .chips button, html[data-theme="vista"] .x, html[data-theme="vista"] button.link { background: transparent; box-shadow: none; filter: none; }
+  html[data-theme="vista"] nav button.on { box-shadow: 0 0 8px rgba(80,180,255,.45), inset 0 1px 0 rgba(255,255,255,.4); }
+  html[data-theme="vista"] .seg { background: #111; border-color: #000; padding: 0; gap: 0; box-shadow: inset 0 1px 0 rgba(255,255,255,.15); }
+  html[data-theme="vista"] .seg button { background: var(--gloss); border: 0; border-right: 1px solid #000; border-radius: 0; box-shadow: none; }
+  html[data-theme="vista"] .seg button.on, html[data-theme="vista"] .chips button.on { background: var(--gloss-blue); color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.5); }
+  html[data-theme="vista"] .seg button.on[data-mode="full"] { background: linear-gradient(180deg, #ffb1a6, #e8412b 50%, #b81a06 51%, #e85a3c); color: #fff; }
+  html[data-theme="vista"] .seg button.on[data-mode="highlights"] { background: linear-gradient(180deg, #ffe7a3, #f0b12e 50%, #c98a06 51%, #f2bd45); color: #2b1c00; text-shadow: none; }
+  html[data-theme="vista"] .seg button.on[data-mode="ask"] { background: var(--gloss-blue); color: #fff; }
+  html[data-theme="vista"] section.box, html[data-theme="vista"] .card, html[data-theme="vista"] .live, html[data-theme="vista"] .side, html[data-theme="vista"] .game {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 4px 14px rgba(0,0,0,.35); }
+  html[data-theme="vista"] .card:hover { box-shadow: 0 0 0 1px rgba(150,220,255,.8), 0 0 14px rgba(80,180,255,.6); }
+  html[data-theme="vista"] .thumb::after { content: ""; position: absolute; inset: 0 0 55% 0; background: linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.03)); pointer-events: none; }
+  html[data-theme="vista"] .kind { border-radius: 8px; border: 1px solid rgba(0,0,0,.7); box-shadow: inset 0 1px 0 rgba(255,255,255,.55); }
+  html[data-theme="vista"] .kind.session { background: linear-gradient(180deg, #ffb1a6, #e8412b 50%, #b81a06 51%, #e85a3c); }
+  html[data-theme="vista"] .kind.clip { background: linear-gradient(180deg, #ffe7a3, #f0b12e 50%, #c98a06 51%, #f2bd45); }
+  html[data-theme="vista"] select, html[data-theme="vista"] .field { background: linear-gradient(180deg, #0a0c0e, #20262d); border-color: #000; box-shadow: inset 0 1px 2px #000, 0 1px 0 rgba(255,255,255,.15); }
+  html[data-theme="vista"] input[type=range] { border: 1px solid #000; box-shadow: inset 0 1px 2px #000, 0 1px 0 rgba(255,255,255,.15);
+    background: linear-gradient(180deg, #a9dcff, #4aa3e6 50%, #1d77c9 51%, #5cb4f0) 0 / var(--fill, 50%) 100% no-repeat, var(--track); }
+  html[data-theme="vista"] input[type=range]::-webkit-slider-thumb { border: 1px solid #08315e; background: radial-gradient(circle at 40% 30%, #fff, #8fd0ff 40%, #1d77c9); box-shadow: 0 0 6px rgba(80,180,255,.7); }
+  html[data-theme="vista"] #player { background: radial-gradient(ellipse at 15% 0%, #2f7fb8 0%, #0b2a4a 40%, #04101f 100%) fixed; }
+
+  /* theme picker */
+  .themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .tp { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 7px; background: var(--card); cursor: pointer; text-align: left; color: var(--text); }
+  .tp:hover { border-color: var(--hover-line); }
+  .tp.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .tp .sw { height: 54px; display: grid; grid-template-columns: 30% 70%; overflow: hidden; margin-bottom: 7px; border: 1px solid rgba(128,128,128,.25); }
+  .tp .n { font-size: 12.5px; }
+  .tp .s2 { font-size: 11px; color: var(--muted); }
+
+  /* ---------- appearance preferences (after the themes, so they win) ---------- */
+  html[data-accent="red"] { --accent: #ef4444; }
+  html[data-accent="orange"] { --accent: #f97316; }
+  html[data-accent="yellow"] { --accent: #eab308; --on-text: #141414; }
+  html[data-accent="green"] { --accent: #22c55e; --on-text: #0d1f12; }
+  html[data-accent="teal"] { --accent: #14b8a6; --on-text: #062421; }
+  html[data-accent="blue"] { --accent: #3b82f6; }
+  html[data-accent="purple"] { --accent: #8b5cf6; }
+  html[data-accent="pink"] { --accent: #ec4899; }
+  html[data-theme="metro"]:not([data-accent="theme"]) { --sel: var(--accent); --logo-bg: var(--accent); }
+  html[data-theme="vista"]:not([data-accent="theme"]) button.primary { background: var(--accent); border-color: rgba(0,0,0,.5); }
+  html[data-text="small"] body { zoom: .9; }
+  html[data-text="large"] body { zoom: 1.15; }
+  html[data-thumbs="small"] { --thumb: 190px; }
+  html[data-thumbs="large"] { --thumb: 340px; }
+  html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation: none !important; transition: none !important; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatch { width: 30px; height: 30px; padding: 0; border-radius: var(--r-lg); border: 2px solid transparent; display: grid; place-items: center; }
+  .swatch i { width: 20px; height: 20px; border-radius: var(--r-sm); display: block; }
+  .swatch.on { border-color: var(--text); }
+  .swatch.auto i { background: conic-gradient(#ef4444, #eab308, #22c55e, #3b82f6, #8b5cf6, #ef4444); }
+  #lookprefs { margin-top: 18px; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="logo"><svg viewBox="0 0 100 100" aria-hidden="true"><defs><mask id="logomask"><rect width="100" height="100" fill="#fff"/><circle cx="36" cy="58" r="9"/><path d="M53 59 L67 54 L68 60 L54 63Z"/><path d="M38 75 Q48 81 60 74 L57 80 Q48 85 40 80Z"/></mask></defs><g fill="currentColor"><path mask="url(#logomask)" d="M16 62 L21 44 L35 33 L53 31 L69 38 L79 54 L78 72 L66 86 L47 91 L29 85 L18 75Z"/><path d="M58 34 L64 26 L74 31 L69 39Z"/><path d="M69 28 Q74 14 86 14" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/><path fill="#ff8a1c" d="M88 4 L90 11 L97 10 L91 15 L95 21 L88 18 L84 24 L84 16 L77 14 L84 11Z"/></g></svg>Fragtape</div>
+  <nav>
+    <button data-view="clips" class="on"><svg viewBox="0 0 24 24"><path d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm6 3.5v7l6-3.5-6-3.5z"/></svg>Clips<span class="count" id="nclips"></span></button>
+    <button data-view="games"><svg viewBox="0 0 24 24"><path d="M7 7h10a5 5 0 0 1 4.9 6l-.8 4a2.5 2.5 0 0 1-4.3 1.2L14.5 16h-5l-2.3 2.2A2.5 2.5 0 0 1 2.9 17l-.8-4A5 5 0 0 1 7 7zm1 3v2H6v2h2v2h2v-2h2v-2h-2v-2H8zm8.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>Games<span class="count" id="ngames"></span></button>
+    <button data-view="settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>Settings</button>
+  </nav>
+  <div class="live off" id="live">
+    <div class="row"><div class="dot"></div><div class="what">Starting…</div><div class="timer"></div></div>
+    <div class="sub"></div>
+    <button id="markbtn" style="display:none">Save highlight</button>
+    <button id="stopbtn" style="display:none">Stop recording</button>
+  </div>
+</aside>
+
+<main>
+  <section class="view on" id="v-clips">
+    <section class="box" id="ask"><div class="title"></div><div class="choices">
+      <button class="primary" data-answer="full">Record whole session</button>
+      <button data-answer="highlights">Only highlights</button>
+      <button data-answer="off">Nothing</button></div></section>
+    <div id="obswarn" class="warn obssetup" style="display:none">
+      <b>Fragtape needs OBS Studio to record.</b>
+      <div>OBS is free. Fragtape runs it hidden in the background, so you never have to open it yourself.</div>
+      <div class="obsbtns"></div>
+      <div class="obsnote"></div>
+    </div>
+    <div class="head">
+      <h1>Clips</h1>
+      <div class="chips" id="kind"><button data-kind="all" class="on">All</button><button data-kind="clip">Highlights</button><button data-kind="session">Sessions</button><button data-kind="fav">★</button></div>
+      <select id="gamefilter"><option value="">All games</option></select>
+      <div class="grow"></div>
+      <input class="field" id="cq" placeholder="Search…" autocomplete="off">
+      <button id="openfolder">Open folder</button>
+    </div>
+    <div id="clips"></div>
+  </section>
+
+  <section class="view" id="v-games">
+    <div class="head"><h1>Games</h1><div class="grow"></div></div>
+    <section class="box">
+      <h2>New games <small>what to do the first time a game is played</small></h2>
+      <div class="seg" id="default"></div>
+    </section>
+    <section class="box">
+      <h2>Add a game <small id="dbcount"></small></h2>
+      <div class="search">
+        <svg viewBox="0 0 24 24"><path d="M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"/></svg>
+        <input class="field" id="q" placeholder="Search ~10,000 games, or type an .exe name" autocomplete="off" spellcheck="false">
+      </div>
+      <div id="results"></div>
+    </section>
+    <section class="box">
+      <h2>Your games <small id="gcount"></small></h2>
+      <div class="head" style="margin-bottom:12px">
+        <input class="field" id="filter" placeholder="Filter…" autocomplete="off">
+        <div class="chips" id="gview"><button data-view="all" class="on">All</button><button data-view="installed">Installed</button></div>
+        <button id="scan" title="Find games from Steam, Riot and Epic on this PC">Scan PC</button>
+      </div>
+      <div class="games" id="games"></div>
+      <div class="note">Ask = ask me next time · Record = whole session, kills become markers · Clips = only save highlights (kills and your hotkey) · Off = ignore</div>
+    </section>
+  </section>
+
+  <section class="view" id="v-settings">
+    <div class="head"><h1>Settings</h1><div class="grow"></div><small class="done" id="recinfo" title="What the next recording will use"></small></div>
+    <div class="tabs" id="stabs">
+      <button data-tab="general">General</button><button data-tab="recording" class="on">Recording</button><button data-tab="advanced">Advanced</button>
+      <button data-tab="appearance">Appearance</button><button data-tab="storage">Storage</button><button data-tab="kills">Kill detection</button><button data-tab="about">About</button>
+    </div>
+    <div class="tab" data-tab="general">
+    <section class="box">
+      <h2>General</h2>
+      <div id="prefs-general"></div>
+      <div class="pref"><label>OBS Studio</label><div class="obsrow"><span id="obspath"></span><span class="obsbtns"></span></div>
+        <div class="why">The recording engine. Found automatically; pick a folder only for a portable or unusual install.</div></div>
+    </section>
+    </div>
+    <div class="tab on" data-tab="recording">
+    <section class="box">
+      <h2>Recording</h2>
+      <div id="prefs"></div>
+    </section>
+    </div>
+    <div class="tab" data-tab="advanced">
+    <section class="box" id="advbox">
+      <h2>Advanced recording <small><button id="advreset" class="link">Reset to defaults</button></small></h2>
+      <div class="adv-note" id="advnote"></div>
+      <h3>Video encoder <small id="encnote"></small></h3>
+      <div id="adv-enc"></div>
+      <h3>Output</h3>
+      <div id="adv-out"></div>
+      <h3>Audio</h3>
+      <div id="adv-audio"></div>
+      <h3>Performance</h3>
+      <div id="adv-perf"></div>
+    </section>
+    </div>
+    <div class="tab" data-tab="appearance">
+    <section class="box">
+      <h2>Appearance</h2>
+      <div class="themes" id="themes"></div>
+      <div id="lookprefs"></div>
+    </section>
+    </div>
+    <div class="tab" data-tab="storage">
+    <section class="box">
+      <h2>Storage</h2>
+      <div class="pref"><label>Videos folder</label><code id="folder"></code><div><button id="openfolder2">Open</button></div></div>
+      <div class="pref"><label>Clip editor</label><span id="ffmpeg"></span><div class="why">Saving a part of a video as a new clip uses ffmpeg (free).</div></div>
+    </section>
+    </div>
+    <div class="tab" data-tab="kills">
+    <section class="box">
+      <h2>Kill detection</h2>
+      <div class="pref"><label>League of Legends</label><span class="done">Automatic</span><div class="why">Read from the game's own local API, nothing to set up.</div></div>
+      <div class="pref"><label>CS2 / Dota 2</label><div><button id="gsi">Set up</button></div><div class="why" id="gsiwhy">Adds Valve's Game State Integration file to the game folders (restart the game afterwards). Dota 2 also needs the launch option -gamestateintegration.</div></div>
+      <div class="pref"><label>Every other game</label><span class="done">Hotkey</span><div class="why">Press your highlight hotkey to mark or clip a moment.</div></div>
+    </section>
+    </div>
+    <div class="tab" data-tab="about">
+    <section class="box">
+      <h2>How it works <small id="version"></small></h2>
+      <div class="note" style="margin-top:0">Fragtape is a small Rust app. It starts its own hidden copy of OBS Studio only while a game is being recorded, with its own settings: your normal OBS is never touched. Between games only the game detection runs (about 2 ms every 2 seconds). This window can be closed: Fragtape keeps running in the tray.</div>
+      <h2 style="margin-top:14px">Activity</h2>
+      <div class="log" id="log"></div>
+    </section>
+    </div>
+  </section>
+
+  <div id="player">
+    <div class="top"><button id="back">← Back</button><div class="ttl" id="ptitle" contenteditable="true" spellcheck="false"></div><div class="sub" id="psub"></div></div>
+    <div class="stage">
+      <div>
+        <div class="vp" id="vp">
+          <video id="video" preload="metadata"></video>
+          <button class="vp-big" id="vpbig" title="Play (Space)"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+          <div class="vp-ctrl">
+            <div class="vp-hover" id="vphover"><canvas width="192" height="108"></canvas><span></span></div>
+            <div class="vp-lane" id="vplane"></div>
+            <div class="vp-bar" id="vpbar"><div class="vp-track"><div class="vp-buf" id="vpbuf"></div><div class="vp-fill" id="vpfill"></div></div>
+              <div class="vp-sel" id="vpsel"><i class="h1"></i><i class="h2"></i></div><div class="vp-knob" id="vpknob"></div></div>
+            <div class="vp-row">
+              <div class="vp-left"><button class="vp-btn" id="vpplay" title="Play / pause (Space)"></button>
+              <div class="vp-vol"><button class="vp-btn" id="vpmute" title="Mute (M)"></button><input type="range" id="vpvolume" min="0" max="1" step="0.05"></div>
+              <span class="vp-time" id="vptime">0:00 / 0:00</span></div>
+              <div class="vp-right"><div class="vp-trim" id="vptrim"></div>
+              <button class="vp-btn vp-speed" id="vpspeed" title="Playback speed">1×</button>
+              <button class="vp-btn" id="vpfs" title="Full screen (F)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div>
+            </div>
+          </div>
+        </div>
+        <div class="tools">
+          <div class="grow"></div>
+          <button id="fav">☆ Favorite</button>
+          <button id="reveal">Show in folder</button>
+          <button class="danger" id="del">Delete</button>
+        </div>
+        <div class="note" id="trimnote"></div>
+      </div>
+      <div class="side"><h2>Moments <small id="nev"></small></h2><div id="events"></div></div>
+    </div>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+const MODES = [["ask", "Ask"], ["full", "Record"], ["highlights", "Clips"], ["off", "Off"]];
+const MODE_TEXT = { full: "Recording the whole session", highlights: "Saving highlights", off: "Not recording" };
+const SOURCE = { steam: "Steam", riot: "Riot", epic: "Epic", custom: "Custom" };
+let state = null, clips = [], clipsKey = "", pageRev = null, kind = "all", gview = "all", current = null, sel = [null, null];
+
+async function api(path, body) {
+  const opts = { headers: { "X-Fragtape-Token": TOKEN } };
+  if (body) { opts.method = "POST"; opts.body = JSON.stringify(body); opts.headers["Content-Type"] = "application/json"; }
+  const r = await fetch(path, opts), data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.status);
+  return data;
+}
+function el(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "data") Object.assign(e.dataset, v); else if (k === "style") e.style.cssText = v; else e[k] = v;
+  }
+  for (const k of kids) if (k != null) e.append(k);
+  return e;
+}
+function toast(msg, err) { const t = $("#toast"); t.textContent = msg; t.className = err ? "err" : ""; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 3500); }
+async function act(path, body) { try { const r = await api(path, body); await refresh(true); return r; } catch (e) { toast(e.message || e, true); } }
+function icon(src, name) {
+  const box = el("div", { class: "icon" });
+  if (src) { const img = el("img", { src, alt: "", loading: "lazy" }); img.onerror = () => box.textContent = (name || "?")[0].toUpperCase(); box.append(img); }
+  else box.textContent = (name || "?")[0].toUpperCase();
+  return box;
+}
+function clock(s) { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = String(Math.floor(s % 3600 / 60)).padStart(h ? 2 : 1, "0"), x = String(s % 60).padStart(2, "0"); return h ? `${h}:${m}:${x}` : `${m}:${x}`; }
+function ago(ts) {
+  if (!ts) return "never played";
+  const s = Date.now() / 1000 - ts;
+  if (s < 90) return "just now"; if (s < 3600) return `${Math.round(s / 60)} min ago`; if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  const d = Math.round(s / 86400); return d === 1 ? "yesterday" : d < 30 ? `${d} days ago` : new Date(ts * 1000).toLocaleDateString();
+}
+function playtime(s) { if (!s) return null; const h = Math.floor(s / 3600), m = Math.round(s % 3600 / 60); return h ? `${h} h ${m} min` : `${m} min`; }
+function size(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + " GB" : Math.max(1, Math.round(b / 1e6)) + " MB"; }
+function gameIcon(name) { const g = (state?.games || []).find(g => g.name.toLowerCase() === (name || "").toLowerCase()); return g?.icon || null; }
+
+/* ---------- navigation ---------- */
+function show(view) {
+  $$("nav button").forEach(b => b.classList.toggle("on", b.dataset.view === view));
+  $$(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + view));
+  closePlayer();
+  if (view === "clips") loadClips();
+}
+$$("nav button").forEach(b => b.onclick = () => show(b.dataset.view));
+
+/* ---------- live status ---------- */
+function renderLive() {
+  const st = state.status || {}, a = state.app || {}, box = $("#live");
+  box.className = "live " + (a.recording ? "rec" : a.replay ? "clip" : st.game ? "" : "");
+  box.querySelector(".what").textContent = st.game || "Watching for games";
+  box.querySelector(".sub").textContent = st.game
+    ? (a.recording ? "Recording" : a.replay ? `Highlights on · press ${a.hotkey} to clip` : st.mode ? MODE_TEXT[st.mode] : "Waiting for your choice")
+    : "Start a game and Fragtape takes it from there";
+  box.querySelector(".timer").textContent = st.game && st.since ? clock(Date.now() / 1000 - st.since) : "";
+  $("#markbtn").style.display = st.game && (a.recording || a.replay) ? "" : "none";
+  $("#markbtn").textContent = `Save highlight (${a.hotkey})`;
+  $("#stopbtn").style.display = a.recording ? "" : "none";
+  const ask = $("#ask"), pending = (st.asking || [])[0];
+  ask.classList.toggle("show", !!pending);
+  if (pending) { ask.querySelector(".title").textContent = `New game: ${pending}. What should Fragtape record?`; ask.dataset.game = pending; }
+  renderObs(a);
+}
+/* ---------- OBS Studio: install / locate ---------- */
+let lastObs = "";
+function renderObs(a) {
+  const o = a.obs || {}, found = a.obs_found !== false;
+  const key = JSON.stringify([found, o]);
+  if (key === lastObs) return;
+  lastObs = key;
+  $("#obswarn").style.display = found ? "none" : "";
+  const browse = () => api("/api/obs/browse", {}).then(r => { refresh(true); if (r.picked) toast("Using OBS from " + r.path); })
+    .catch(e => { refresh(true); toast(e.message || e, true); });
+  const b = (text, fn, primary) => el("button", { textContent: text, class: primary ? "primary" : "", onclick: fn });
+  const install = () => o.installing ? el("span", { textContent: "Installing OBS Studio… (Windows may ask for permission)" })
+    : b("Install OBS Studio", () => act("/api/obs/install", {}).then(() => toast("Installing OBS Studio in the background…")), true);
+  $("#obswarn .obsbtns").replaceChildren(install(),
+    b("Download page", () => act("/api/obs/download", {})),
+    b("I already have it…", browse));
+  $("#obswarn .obsnote").textContent = o.note || "";
+  $("#obspath").textContent = found ? (o.path || "") + (o.custom ? "" : "  (found automatically)") : "Not installed";
+  $(".obsrow .obsbtns").replaceChildren(...[
+    found ? null : install(),
+    b(found ? "Change…" : "Locate…", browse),
+    o.custom ? b("Auto-detect", () => act("/api/obs/path", { path: null }).then(() => toast("Finding OBS automatically"))) : null,
+  ].filter(Boolean));
+  if (!found && o.note) $("#obspath").textContent = "Not installed. " + o.note;
+}
+$("#markbtn").onclick = () => act("/api/mark", {}).then(() => toast("Highlight saved"));
+$("#stopbtn").onclick = () => act("/api/stop", {});
+$$("[data-answer]").forEach(b => b.onclick = () => act("/api/answer", { name: $("#ask").dataset.game, mode: b.dataset.answer }));
+
+/* ---------- clips ---------- */
+async function loadClips(force) {
+  try {
+    const data = await api("/api/clips");
+    const key = JSON.stringify(data.clips);
+    if (key === clipsKey && !force) return;
+    clipsKey = key; clips = data.clips;
+    $("#nclips").textContent = clips.length || "";
+    const games = [...new Set(clips.map(c => c.game))].sort();
+    const gf = $("#gamefilter"), cur = gf.value;
+    gf.replaceChildren(el("option", { value: "", textContent: "All games" }), ...games.map(g => el("option", { value: g, textContent: g })));
+    gf.value = games.includes(cur) ? cur : "";
+    renderClips();
+    thumbQueue(clips.filter(c => !c.live && (!c.thumb || c.duration == null)));
+    const want = location.hash.match(/^#clip=(\w+)/);
+    if (want && !current) { const c = clips.find(c => c.id === want[1]); history.replaceState(null, "", location.pathname + location.search); if (c) openPlayer(c); }
+  } catch (e) { /* app restarting */ }
+}
+function renderClips() {
+  const q = $("#cq").value.trim().toLowerCase(), g = $("#gamefilter").value;
+  const list = clips.filter(c => (kind === "all" || (kind === "fav" ? c.favorite : c.kind === kind)) && (!g || c.game === g)
+    && (!q || (c.title + " " + c.game + " " + c.name).toLowerCase().includes(q)));
+  const out = $("#clips");
+  if (!list.length) {
+    out.replaceChildren(el("div", { class: "empty" }, el("b", { textContent: clips.length ? "Nothing matches" : "No clips yet" }),
+      clips.length ? "Try another filter." : "Play a game: Fragtape records it (or just its highlights) and everything shows up here."));
+    return;
+  }
+  const groups = new Map();
+  for (const c of list) { if (!groups.has(c.game)) groups.set(c.game, []); groups.get(c.game).push(c); }
+  const kids = [];
+  for (const [game, items] of groups) {
+    kids.push(el("div", { class: "group-title" }, icon(gameIcon(game), game), game, el("small", { textContent: `${items.length} video${items.length > 1 ? "s" : ""}` })));
+    kids.push(el("div", { class: "grid" }, ...items.map(card)));
+  }
+  out.replaceChildren(...kids);
+}
+function card(c) {
+  const th = el("div", { class: "thumb", style: c.thumb ? `background-image:url("/thumb/${c.id}?t=${TOKEN}&v=${c.mtime}")` : "" },
+    el("span", { class: "kind " + (c.live ? "live" : c.kind), textContent: c.live ? "● REC" : c.kind === "clip" ? "CLIP" : "SESSION" }),
+    c.duration ? el("span", { class: "len", textContent: clock(c.duration) }) : null,
+    c.markers.length ? el("span", { class: "ev", textContent: `⚑ ${c.markers.length}` }) : null,
+    c.favorite ? el("span", { class: "star", textContent: "★" }) : null);
+  th.id = "th-" + c.id;
+  return el("div", { class: "card", onclick: () => c.live ? toast("Still recording: it opens once the game is closed") : openPlayer(c) }, th,
+    el("div", { class: "info" }, el("div", { class: "title", textContent: c.title, title: c.name }),
+      el("div", { class: "meta", textContent: `${ago(c.mtime)} · ${size(c.size)}` })));
+}
+$$("#kind button").forEach(b => b.onclick = () => { kind = b.dataset.kind; $$("#kind button").forEach(x => x.classList.toggle("on", x === b)); renderClips(); });
+$("#gamefilter").onchange = renderClips;
+$("#cq").oninput = renderClips;
+$("#openfolder").onclick = $("#openfolder2").onclick = () => act("/api/open-folder", {});
+
+/* thumbnails + durations, made by the browser one at a time and cached by the app */
+let thumbBusy = false, thumbTodo = [];
+function thumbQueue(items) { const have = new Set(thumbTodo.map(c => c.id)); thumbTodo.push(...items.filter(c => !have.has(c.id))); if (!thumbBusy) nextThumb(); }
+async function nextThumb() {
+  const c = thumbTodo.shift();
+  if (!c) { thumbBusy = false; return; }
+  thumbBusy = true;
+  try { await makeThumb(c); } catch (e) {}
+  setTimeout(nextThumb, 50);
+}
+function makeThumb(c) {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.muted = true; v.preload = "auto"; v.src = `/media/${c.id}?t=${TOKEN}`;
+    const done = () => { v.removeAttribute("src"); v.load(); };
+    const timer = setTimeout(() => { done(); reject("timeout"); }, 15000);
+    v.onloadedmetadata = () => {
+      if (isFinite(v.duration) && c.duration == null) { c.duration = v.duration; api("/api/clip/update", { id: c.id, duration: Math.round(v.duration * 10) / 10 }).catch(() => {}); }
+      if (c.thumb) { clearTimeout(timer); done(); resolve(); return; }
+      v.currentTime = Math.min(v.duration * 0.3 || 1, 12);
+    };
+    v.onseeked = () => {
+      const cv = document.createElement("canvas"); cv.width = 384; cv.height = 216;
+      const ctx = cv.getContext("2d"), r = Math.min(384 / v.videoWidth, 216 / v.videoHeight);
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 384, 216);
+      const w = v.videoWidth * r, h = v.videoHeight * r; ctx.drawImage(v, (384 - w) / 2, (216 - h) / 2, w, h);
+      cv.toBlob(async blob => {
+        clearTimeout(timer); done();
+        try {
+          await fetch(`/api/thumb?id=${c.id}`, { method: "POST", body: blob, headers: { "X-Fragtape-Token": TOKEN, "Content-Type": "image/jpeg" } });
+          c.thumb = true;
+          const th = document.getElementById("th-" + c.id);
+          if (th) { th.style.backgroundImage = `url("/thumb/${c.id}?t=${TOKEN}&v=${Date.now()}")`; if (c.duration && !th.querySelector(".len")) th.append(el("span", { class: "len", textContent: clock(c.duration) })); }
+        } catch (e) {}
+        resolve();
+      }, "image/jpeg", 0.82);
+    };
+    v.onerror = () => { clearTimeout(timer); done(); reject("error"); };
+  });
+}
+
+/* ---------- player ---------- */
+const video = $("#video"), vp = $("#vp");
+const SVG = (d, extra = "") => `<svg viewBox="0 0 24 24" ${extra}>${d}</svg>`;
+const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"';
+const ICON = {
+  play: SVG('<path d="M8 5v14l11-7z"/>'),
+  pause: SVG('<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>'),
+  vol: n => SVG('<path d="M3 9v6h4l5 4V5L7 9z"/>' +
+    (n === 0 ? `<path d="M15.5 9.5l5 5m0-5l-5 5" ${STROKE}/>` :
+      `<path d="M15 9a4 4 0 0 1 0 6" ${STROKE}/>` + (n > 1 ? `<path d="M17.5 6.5a7.5 7.5 0 0 1 0 11" ${STROKE}/>` : ""))),
+  scissors: SVG(`<circle cx="6" cy="7" r="3" ${STROKE}/><circle cx="6" cy="17" r="3" ${STROKE}/><path d="M8.5 8.5L20 18M8.5 15.5L20 6" ${STROKE}/>`),
+  close: SVG(`<path d="M6 6l12 12M18 6L6 18" ${STROKE}/>`),
+};
+/* moment icons: what happened, at a glance */
+const RET = '<circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2.2"/>';
+const FLAG = '<path d="M6 21V3" stroke="currentColor" stroke-width="2.2"/><path d="M7 4h12l-3 4.5 3 4.5H7z"/>';
+const MOMENT = {
+  kill: ["#f59e0b", SVG(RET)],
+  first_blood: ["#f87171", SVG(RET)],
+  headshot: ["#f59e0b", SVG(RET + '<circle cx="12" cy="12" r="2.6"/>')],
+  double_kill: ["#ef4444", "<b>2</b>"], triple_kill: ["#ef4444", "<b>3</b>"], quad_kill: ["#ef4444", "<b>4</b>"], penta_kill: ["#ef4444", "<b>5</b>"],
+  ace: ["#facc15", SVG('<path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7L2 9.2l7.1-.6z"/>')],
+  mvp: ["#facc15", SVG('<path d="M3 18h18l1.5-11-5.5 4-5-7-5 7-5.5-4z"/>')],
+  objective: ["#38bdf8", SVG(FLAG)],
+  objective_steal: ["#38bdf8", SVG(FLAG)],
+  structure: ["#7dd3fc", SVG('<path d="M5 21V9l3-2V3h8v4l3 2v12h-5v-5h-4v5z"/>')],
+  manual: ["var(--accent)", SVG('<path d="M6 2h12v20l-6-4.5L6 22z"/>')],
+  death: ["#9ca3af", SVG('<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>')],
+  assist: ["#9ca3af", SVG('<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>')],
+};
+function moment(m) { return MOMENT[m.kind] || (/manual|highlight/i.test(m.label) ? MOMENT.manual : MOMENT.kill); }
+const SPEEDS = [0.25, 0.5, 1, 1.5, 2];
+
+function openPlayer(c) {
+  current = c; sel = [null, null];
+  $("#player").classList.add("on");
+  $("#ptitle").textContent = c.title;
+  $("#psub").textContent = `${c.game} · ${new Date(c.mtime * 1000).toLocaleString()} · ${size(c.size)}`;
+  video.src = `/media/${c.id}?t=${TOKEN}`;
+  preview.src = video.src;
+  video.playbackRate = 1; $("#vpspeed").textContent = "1×";
+  video.play().catch(() => {});
+  $("#fav").textContent = c.favorite ? "★ Favorite" : "☆ Favorite";
+  const evs = $("#events");
+  evs.replaceChildren(...(c.markers.length ? c.markers.map(m => {
+    const [col, ic] = moment(m);
+    return el("div", { class: "event", onclick: () => seek(m.offset - 3) },
+      el("span", { class: "ico", style: `--c:${col}`, innerHTML: ic }), el("span", { class: "at", textContent: clock(m.offset) }),
+      el("div", {}, el("div", { textContent: m.label }), m.detail ? el("div", { class: "d", textContent: m.detail }) : null));
+  }) : [el("div", { class: "note", textContent: c.kind === "session" ? "No kills were detected in this recording. Press your highlight hotkey while playing to mark moments." : "Kills and marks inside this clip show up here." })]));
+  $("#nev").textContent = c.markers.length || "";
+  updateSel(); drawTimeline(); poke();
+}
+function closePlayer() {
+  $("#player").classList.remove("on");
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  video.pause(); video.removeAttribute("src"); video.load(); preview.removeAttribute("src"); preview.load(); current = null;
+}
+function seek(t) { video.currentTime = Math.min(Math.max(0, t), dur() || 0); video.play().catch(() => {}); }
+function togglePlay() { video.paused ? video.play().catch(() => {}) : video.pause(); }
+$("#back").onclick = () => { closePlayer(); loadClips(); };
+function dur() { return isFinite(video.duration) && video.duration > 0 ? video.duration : (current?.duration || 0); }
+const pct = t => `${Math.min(100, Math.max(0, t / (dur() || 1) * 100))}%`;
+
+/* the seek bar: highlights, moments, trim box, progress */
+function drawTimeline() {
+  const lane = $("#vplane"), track = $("#vpbar .vp-track"), d = dur();
+  lane.replaceChildren(); track.querySelectorAll(".vp-hl").forEach(x => x.remove());
+  if (!current || !d) return;
+  for (const h of current.highlights || []) track.insertBefore(el("div", { class: "vp-hl", style: `left:${pct(h.start)};width:${(h.end - h.start) / d * 100}%`, title: h.title }), $("#vpfill"));
+  for (const m of current.markers) {
+    const [col, ic] = moment(m);
+    lane.append(el("button", { class: "vp-pin", style: `left:${pct(m.offset)};--c:${col}`, innerHTML: ic, title: `${clock(m.offset)}  ${m.label}${m.detail ? " · " + m.detail : ""}`,
+      onclick: e => { e.stopPropagation(); seek(m.offset - 3); } }));
+  }
+  drawProgress(); drawSel();
+}
+function drawProgress() {
+  const d = dur(); if (!d) return;
+  $("#vpfill").style.width = pct(video.currentTime); $("#vpknob").style.left = pct(video.currentTime);
+  const b = video.buffered; $("#vpbuf").style.width = b.length ? pct(b.end(b.length - 1)) : "0";
+  $("#vptime").textContent = `${clock(video.currentTime)} / ${clock(d)}`;
+}
+function drawSel() {
+  const [a, b] = sel, box = $("#vpsel"), on = a != null && b != null && dur() > 0;
+  box.classList.toggle("on", on);
+  if (on) { box.style.left = pct(a); box.style.width = `${(b - a) / dur() * 100}%`; }
+}
+function updateSel() {
+  const [a, b] = sel, ok = a != null && b != null && b - a >= 1, ff = state?.app?.ffmpeg, t = $("#vptrim");
+  if (a == null || b == null) {
+    t.replaceChildren(el("button", { class: "vp-btn", title: "Make a clip from this video ( [ and ] )", innerHTML: ICON.scissors, onclick: startTrim }));
+  } else {
+    t.replaceChildren(el("span", { class: "rng", textContent: `${clock(Math.round(a))}–${clock(Math.round(b))} (${Math.round(b) - Math.round(a)} s)` }),
+      el("button", { class: "primary", textContent: "Save clip", disabled: !ok || !ff, onclick: saveTrim }),
+      el("button", { class: "vp-btn", title: "Cancel", innerHTML: ICON.close, onclick: () => { sel = [null, null]; updateSel(); } }));
+  }
+  $("#trimnote").replaceChildren();
+  if (!ff && ok) $("#trimnote").append("Saving clips needs ffmpeg. ",
+    state?.app?.installing_ffmpeg ? "Installing…" : el("button", { textContent: "Install ffmpeg", onclick: () => act("/api/install-ffmpeg", {}).then(() => toast("Installing ffmpeg in the background…")) }));
+  drawSel();
+}
+function startTrim() { const t = video.currentTime, d = dur(); sel = [Math.max(0, t - 15), Math.min(d, t + 15)]; updateSel(); }
+async function saveTrim(e) {
+  const [a, b] = sel, btn = e.currentTarget; btn.disabled = true; btn.textContent = "Saving…";
+  const r = await act("/api/clip/trim", { id: current.id, start: a, end: b, title: $("#ptitle").textContent.trim() });
+  if (r) { toast(`Saved ${r.name}`); sel = [null, null]; clipsKey = ""; }
+  updateSel();
+}
+
+/* dragging: the bar seeks, the white handles move the trim box */
+const barTime = x => { const r = $("#vpbar").getBoundingClientRect(); return Math.min(1, Math.max(0, (x - r.left) / r.width)) * dur(); };
+function drag(onMove, onUp) {
+  vp.classList.add("drag");
+  const move = e => onMove(barTime(e.clientX));
+  const up = () => { vp.classList.remove("drag"); removeEventListener("mousemove", move); removeEventListener("mouseup", up); if (onUp) onUp(); };
+  addEventListener("mousemove", move); addEventListener("mouseup", up);
+}
+$("#vpbar").onmousedown = e => {
+  if (e.button !== 0 || !dur()) return;
+  e.preventDefault();
+  const h = e.target.closest(".vp-sel i");
+  if (h) {
+    const i = h.classList.contains("h1") ? 0 : 1;
+    return drag(t => { sel[i] = i ? Math.max(t, sel[0] + 1) : Math.min(t, sel[1] - 1); updateSel(); });
+  }
+  const wasPlaying = !video.paused; video.pause();
+  video.currentTime = barTime(e.clientX); drawProgress();
+  drag(t => { video.currentTime = t; drawProgress(); }, () => { if (wasPlaying) video.play().catch(() => {}); });
+};
+
+/* hover preview: a second, hidden video seeks to the spot under the mouse */
+const preview = Object.assign(document.createElement("video"), { muted: true, preload: "auto" });
+let pvWant = null, pvBusy = false;
+function pvSeek() { if (pvBusy || pvWant == null || !preview.src) return; pvBusy = true; preview.currentTime = pvWant; pvWant = null; }
+preview.onseeked = () => {
+  const cv = $("#vphover canvas"), ctx = cv.getContext("2d"), r = Math.min(192 / preview.videoWidth, 108 / preview.videoHeight) || 1;
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 192, 108);
+  ctx.drawImage(preview, (192 - preview.videoWidth * r) / 2, (108 - preview.videoHeight * r) / 2, preview.videoWidth * r, preview.videoHeight * r);
+  pvBusy = false; pvSeek();
+};
+preview.onerror = () => { pvBusy = false; };
+$("#vpbar").onmousemove = e => {
+  const d = dur(); if (!d) return;
+  const t = barTime(e.clientX), hv = $("#vphover"), r = vp.getBoundingClientRect(), lane = $("#vplane").getBoundingClientRect();
+  const near = current?.markers.find(m => Math.abs(m.offset - t) / d < 0.012);
+  hv.querySelector("span").textContent = clock(t) + (near ? ` · ${near.label}` : "");
+  hv.style.left = `${Math.min(r.width - 100, Math.max(100, e.clientX - r.left))}px`;
+  hv.style.bottom = `${r.bottom - lane.top + 4}px`; // above the moment icons
+  hv.classList.add("on"); pvWant = t; pvSeek();
+};
+$("#vpbar").onmouseleave = () => $("#vphover").classList.remove("on");
+
+/* buttons */
+function drawPlay() { $("#vpplay").innerHTML = video.paused ? ICON.play : ICON.pause; vp.classList.toggle("playing", !video.paused); }
+function drawVol() {
+  const v = video.muted ? 0 : video.volume;
+  $("#vpmute").innerHTML = ICON.vol(v === 0 ? 0 : v < 0.5 ? 1 : 2);
+  $("#vpvolume").value = v; $("#vpvolume").style.setProperty("--fill", v * 100 + "%");
+}
+$("#vpplay").onclick = $("#vpbig").onclick = togglePlay;
+video.onclick = togglePlay;
+video.ondblclick = () => $("#vpfs").click();
+$("#vpmute").onclick = () => { video.muted = !video.muted; if (!video.muted && video.volume === 0) video.volume = 0.5; };
+$("#vpvolume").oninput = e => { video.volume = Number(e.target.value); video.muted = video.volume === 0; };
+$("#vpspeed").onclick = () => { const i = (SPEEDS.indexOf(video.playbackRate) + 1) % SPEEDS.length; video.playbackRate = SPEEDS[i]; $("#vpspeed").textContent = SPEEDS[i] + "×"; };
+$("#vpfs").onclick = () => document.fullscreenElement ? document.exitFullscreen().catch(() => {}) : vp.requestFullscreen().catch(() => {});
+video.onplay = video.onpause = () => { drawPlay(); poke(); };
+video.onvolumechange = () => { drawVol(); try { localStorage.setItem("volume", JSON.stringify([video.volume, video.muted])); } catch (e) {} };
+video.ontimeupdate = video.onprogress = drawProgress;
+video.onloadedmetadata = drawTimeline;
+try { const [v, m] = JSON.parse(localStorage.getItem("volume") || "[1,false]"); video.volume = v; video.muted = m; } catch (e) {}
+drawPlay(); drawVol();
+/* hide the controls while watching */
+let idleT;
+function poke() { vp.classList.remove("idle"); clearTimeout(idleT); if (!video.paused) idleT = setTimeout(() => vp.classList.add("idle"), 2500); }
+vp.onmousemove = poke;
+vp.onmouseleave = () => { if (!video.paused) vp.classList.add("idle"); };
+
+$("#fav").onclick = async () => { current.favorite = !current.favorite; await act("/api/clip/update", { id: current.id, favorite: current.favorite }); $("#fav").textContent = current.favorite ? "★ Favorite" : "☆ Favorite"; };
+$("#reveal").onclick = () => act("/api/clip/reveal", { id: current.id });
+$("#del").onclick = async () => {
+  if (!confirm(`Move "${current.title}" to the Recycle Bin?`)) return;
+  const id = current.id; closePlayer();
+  if (await act("/api/clip/delete", { id }) !== undefined) { toast("Moved to the Recycle Bin"); loadClips(true); }
+};
+$("#ptitle").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } };
+$("#ptitle").onblur = () => { const t = $("#ptitle").textContent.trim(); if (current && t && t !== current.title) { current.title = t; api("/api/clip/update", { id: current.id, title: t }).catch(e => toast(e.message, true)); clipsKey = ""; } };
+/* keyboard: Space/K play, Left/Right 5 s, J/L 10 s, comma/period one frame, Shift+Left/Right previous/next moment,
+   [ ] trim, M mute, F full screen */
+function jumpMoment(dir) {
+  const t = video.currentTime, ms = (current?.markers || []).map(m => m.offset).sort((a, b) => a - b);
+  const next = dir > 0 ? ms.find(o => o - 3 > t + 0.5) : [...ms].reverse().find(o => o - 3 < t - 1);
+  if (next != null) seek(next - 3);
+}
+document.addEventListener("keydown", e => {
+  if (!current || e.target.isContentEditable || e.target.tagName === "INPUT") return;
+  const k = e.key, frame = 1 / 60;
+  if (k === "[") { sel[0] = video.currentTime; if (sel[1] == null || sel[1] <= sel[0]) sel[1] = Math.min(dur(), sel[0] + 15); updateSel(); }
+  else if (k === "]") { sel[1] = video.currentTime; if (sel[0] == null || sel[0] >= sel[1]) sel[0] = Math.max(0, sel[1] - 15); updateSel(); }
+  else if (k === "Escape") { if (document.fullscreenElement) return; $("#back").click(); }
+  else if (k === " " || k === "k" || k === "K") { e.preventDefault(); togglePlay(); }
+  else if (k === "ArrowLeft" && e.shiftKey) jumpMoment(-1);
+  else if (k === "ArrowRight" && e.shiftKey) jumpMoment(1);
+  else if (k === "ArrowLeft") video.currentTime -= 5;
+  else if (k === "ArrowRight") video.currentTime += 5;
+  else if (k === "j" || k === "J") video.currentTime -= 10;
+  else if (k === "l" || k === "L") video.currentTime += 10;
+  else if (k === ",") { video.pause(); video.currentTime -= frame; }
+  else if (k === ".") { video.pause(); video.currentTime += frame; }
+  else if (k === "m" || k === "M") $("#vpmute").click();
+  else if (k === "f" || k === "F") $("#vpfs").click();
+  else return;
+  poke(); drawProgress();
+});
+
+/* ---------- games ---------- */
+function seg(items, current, onPick, modeAttr) {
+  const s = el("div", { class: "seg" });
+  for (const [v, label, title] of items) s.append(el("button", { class: v === current ? "on" : "", textContent: label, title: title || "", data: modeAttr ? { mode: v } : {}, onclick: () => onPick(v) }));
+  return s;
+}
+let lastGames = "", lastDefault = "";
+function renderGames() {
+  if (state.default_mode !== lastDefault) { lastDefault = state.default_mode; $("#default").replaceWith(Object.assign(seg(MODES, lastDefault, m => act("/api/default", { mode: m }), true), { id: "default" })); }
+  const f = $("#filter").value.trim().toLowerCase(), playing = (state.status || {}).game;
+  const key = JSON.stringify([state.games, f, playing, gview]);
+  $("#ngames").textContent = state.games.length || "";
+  $("#dbcount").textContent = state.db.ready ? `${state.db.count.toLocaleString()} games` : "downloading game list…";
+  const scan = $("#scan"); scan.disabled = !!state.scanning || !state.db.ready; scan.textContent = state.scanning ? "Scanning…" : "Scan PC";
+  if (key === lastGames) return;
+  lastGames = key;
+  const games = state.games.filter(g => (!f || g.name.toLowerCase().includes(f)) && (gview === "all" || g.installed || g.name === playing))
+    .sort((a, b) => (b.name === playing) - (a.name === playing) || (b.last_played || b.added || 0) - (a.last_played || a.added || 0));
+  $("#gcount").textContent = state.games.length || "";
+  const list = $("#games");
+  if (!games.length) { list.replaceChildren(el("div", { class: "empty", textContent: state.games.length ? "No match" : "Games you play show up here automatically." })); return; }
+  list.replaceChildren(...games.map(g => el("div", { class: "game" + (g.name === playing ? " playing" : "") },
+    icon(g.icon, g.name),
+    el("div", { style: "min-width:0" }, el("div", { class: "name", title: g.name }, g.name, g.kills ? el("span", { class: "badge", textContent: "KILLS", title: "Automatic kill detection" }) : null),
+      el("div", { class: "meta", textContent: [SOURCE[g.source], g.name === playing ? "playing now" : ago(g.last_played), playtime(g.playtime)].filter(Boolean).join(" · "), title: (g.exes || []).join(", ") })),
+    el("button", { class: "x", textContent: "×", title: "Remove (you'll be asked again next time)", onclick: () => act("/api/remove", { name: g.name }) }),
+    seg(MODES, g.mode, m => act("/api/mode", { name: g.name, mode: m }), true))));
+}
+$("#filter").oninput = () => { lastGames = ""; renderGames(); };
+$("#scan").onclick = () => act("/api/scan", {});
+$$("#gview button").forEach(b => b.onclick = () => { gview = b.dataset.view; $$("#gview button").forEach(x => x.classList.toggle("on", x === b)); lastGames = ""; renderGames(); });
+let searchTimer = null;
+$("#q").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(search, 150); };
+async function search() {
+  const q = $("#q").value.trim(), out = $("#results");
+  if (q.length < 2) { out.replaceChildren(); return; }
+  const rows = [], reset = () => { $("#q").value = ""; out.replaceChildren(); };
+  if (/\.exe$/i.test(q) || !state.db.ready) {
+    const exe = q.toLowerCase().endsWith(".exe") ? q : q + ".exe";
+    rows.push(el("div", { class: "result" }, icon(null, exe), el("div", { textContent: `Custom game: ${exe}` }),
+      el("button", { textContent: "Add", onclick: () => { act("/api/add", { exe, name: exe.replace(/\.exe$/i, "") }); reset(); } })));
+  }
+  try {
+    for (const r of await api("/api/search?q=" + encodeURIComponent(q)))
+      rows.push(el("div", { class: "result" }, icon(r.icon, r.name), el("div", {}, r.name, r.kills ? el("span", { class: "badge", textContent: "KILLS" }) : null),
+        r.added ? el("span", { class: "done", textContent: "added" }) : el("button", { textContent: "Add", onclick: () => { act("/api/add", { id: r.id }); reset(); } })));
+  } catch (e) { toast(e.message, true); }
+  if (!rows.length) rows.push(el("div", { class: "done", textContent: "No game found. Type its .exe name to add it." }));
+  out.replaceChildren(...rows);
+}
+
+/* ---------- settings ---------- */
+const PREFS = [
+  ["capture", "Capture", [["game", "Game window"], ["screen", "Whole screen"]], { game: "Only the game, nothing else on your screen.", screen: "The whole monitor: use this if a game's anti-cheat blocks game capture (black video)." }],
+  ["audio", "Audio", [["game", "Game"], ["game_mic", "Game + mic"], ["all", "All PC sound"]], { game: "Only the game's sound: no Discord, music or notifications.", game_mic: "The game's sound and your microphone.", all: "Everything you hear, plus your microphone." }],
+  ["mic_mono", "Microphone in mono", [[true, "On"], [false, "Off"]], { true: "Your voice in both ears (for single-input mics/interfaces).", false: "Keep the mic as stereo." }],
+  ["quality", "Quality", [["small", "Small"], ["balanced", "Balanced"], ["high", "High"], ["max", "Max"], ["custom", "Custom"]], { small: "Smaller files.", balanced: "Good quality, moderate size.", high: "Great quality (recommended).", max: "Best quality, big files.", custom: "Uses the encoder settings on the Advanced tab." }],
+  ["fps", "Frame rate", [[30, "30"], [60, "60"]], { 30: "30 fps, smaller files.", 60: "60 fps, smooth (recommended for games)." }],
+  ["clip_length", "Clip length", [[15, "15 s"], [30, "30 s"], [60, "60 s"], [120, "2 min"]], { "": "How much is kept before a highlight in Clips mode." }],
+  ["hotkey", "Highlight hotkey", [["F8", "F8"], ["F9", "F9"], ["F10", "F10"], ["Ctrl+F8", "Ctrl+F8"], ["off", "Off"]], { "": "Press it in game to save a clip (Clips mode) or mark the moment (Record mode)." }],
+  ["notify_highlight", "Highlight notification", [[true, "On"], [false, "Off"]], { true: "A small card in the corner when you press the hotkey.", false: "No card when you press the hotkey." }],
+  ["notify_clip", "Clip saved notification", [[true, "On"], [false, "Off"]], { true: "A small card in the corner when a clip is saved.", false: "Clips are saved silently." }],
+  ["autostart", "Start with Windows", [[true, "On"], [false, "Off"]], { "": "Starts in the tray, so games are recorded without opening anything." }],
+];
+const GENERAL = ["autostart", "hotkey", "notify_highlight", "notify_clip"];
+function showTab(name) {
+  if (!$(`#stabs button[data-tab="${name}"]`)) name = "recording";
+  $$("#stabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  $$("#v-settings .tab").forEach(t => t.classList.toggle("on", t.dataset.tab === name));
+  try { localStorage.setItem("settingsTab", name); } catch (e) {}
+}
+$$("#stabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+try { showTab(localStorage.getItem("settingsTab") || "recording"); } catch (e) {}
+let lastPrefs = "";
+function renderSettings() {
+  const p = state.prefs || {}, q = (state.status || {}).quality || {}, a = state.app || {};
+  const key = JSON.stringify([p, a.next, a.encoders, a.vendor, a.ffmpeg, a.installing_ffmpeg, a.folder]);
+  $("#log").textContent = (a.log || []).join("\n");
+  if (key === lastPrefs) return;
+  lastPrefs = key;
+  const prefRow = ([k, label, opts, why]) => el("div", { class: "pref" }, el("label", { textContent: label }),
+    seg(opts, p[k], v => act("/api/pref", { key: k, value: v })), el("div", { class: "why", textContent: why[String(p[k])] ?? why[""] ?? "" }));
+  $("#prefs").replaceChildren(...PREFS.filter(x => !GENERAL.includes(x[0])).map(prefRow));
+  $("#prefs-general").replaceChildren(...GENERAL.map(k => PREFS.find(x => x[0] === k)).map(prefRow));
+  const n = a.next || {};
+  $("#recinfo").textContent = n.out ? `Next recording: ${n.out.replace("x", "×")} · ${n.fps} fps · ${n.encoder}` : "";
+  renderAdvanced();
+  renderThemes();
+  renderLook();
+  $("#folder").textContent = a.folder || "";
+  $("#version").textContent = a.version ? "v" + a.version : "";
+  $("#ffmpeg").replaceChildren(a.ffmpeg ? "ffmpeg found ✓" : a.installing_ffmpeg ? "Installing ffmpeg…" :
+    el("button", { textContent: "Install ffmpeg", onclick: () => act("/api/install-ffmpeg", {}).then(() => toast("Installing ffmpeg in the background…")) }));
+}
+
+/* ---------- appearance ---------- */
+const THEMES = [
+  ["sharp", "Sharp minimal", "default", "background:#0d0d0d;border-right:2px solid #ef4444", "background:#151515"],
+  ["win10dark", "Graphite", "", "background:#191919;border-right:3px solid #0078d4", "background:#2b2b2b"],
+  ["metro", "Blocks", "", "background:#e81123", "background:#1d1d1d"],
+  ["win10light", "Paper", "", "background:#f2f2f2;border-right:3px solid #0078d4", "background:#fff"],
+  ["vista", "Vista Aero", "", "background:linear-gradient(180deg,rgba(150,215,255,.7),rgba(20,90,170,.8))", "background:radial-gradient(ellipse at 20% 0%,#2f7fb8,#0b2a4a 60%,#04101f)"],
+];
+function applyTheme(t) { document.documentElement.dataset.theme = t || "sharp"; }
+const ACCENTS = [["theme", "Theme colour"], ["red", "#ef4444"], ["orange", "#f97316"], ["yellow", "#eab308"], ["green", "#22c55e"],
+  ["teal", "#14b8a6"], ["blue", "#3b82f6"], ["purple", "#8b5cf6"], ["pink", "#ec4899"]];
+/* the look settings apply instantly in the window, then get saved */
+function applyLook(p) {
+  const d = document.documentElement.dataset;
+  d.accent = p.accent || "theme"; d.text = p.text_size || "normal"; d.thumbs = p.thumb_size || "medium";
+  d.motion = p.animations === false ? "off" : "on";
+}
+function setLook(k, v) { applyLook({ ...state.prefs, [k]: v }); return setPref(k, v); }
+let lastLook = "";
+function renderLook() {
+  const p = state.prefs, key = JSON.stringify(["accent", "text_size", "thumb_size", "animations", "card_corner", "card_time", "theme"].map(k => p[k]));
+  applyLook(p);
+  if (key === lastLook) return;
+  lastLook = key;
+  const pick = (k, opts) => seg(opts, p[k], v => setLook(k, v));
+  const swatches = el("div", { class: "swatches" }, ...ACCENTS.map(([id, c]) => el("button", {
+    class: "swatch" + (id === "theme" ? " auto" : "") + ((p.accent || "theme") === id ? " on" : ""),
+    title: id === "theme" ? "The theme's own colour" : id[0].toUpperCase() + id.slice(1),
+    onclick: () => setLook("accent", id) }, el("i", id === "theme" ? {} : { style: `background:${c}` }))));
+  $("#lookprefs").replaceChildren(
+    row("Accent colour", swatches, "Buttons, selection and the in-game cards. The rainbow one uses the theme's colour."),
+    row("Text size", pick("text_size", [["small", "Small"], ["normal", "Normal"], ["large", "Large"]]), "Makes the whole window smaller or bigger."),
+    row("Clip thumbnails", pick("thumb_size", [["small", "Small"], ["medium", "Medium"], ["large", "Large"]]), "How big the videos are in Clips."),
+    row("Animations", pick("animations", [[true, "On"], [false, "Off"]]), "Off: nothing slides, fades or pulses."),
+    row("In-game cards", pick("card_corner", [["top_left", "Top left"], ["top_right", "Top right"], ["bottom_left", "Bottom left"], ["bottom_right", "Bottom right"]]),
+      "Which corner of the game window the cards use."),
+    row("Card time", pick("card_time", [["short", "2 s"], ["normal", "3.5 s"], ["long", "6 s"]]),
+      "How long highlight and clip cards stay. The new-game question stays 30 s."),
+    row("", el("button", { textContent: "Show a test card", onclick: () => act("/api/test-card", {}) }), "Shows a card in the corner of this screen."),
+  );
+}
+function renderThemes() {
+  const cur = state.prefs.theme || "sharp";
+  $("#themes").replaceChildren(...THEMES.map(([id, name, sub, left, right]) => el("button", { class: "tp" + (id === cur ? " on" : ""),
+    onclick: () => { applyTheme(id); setPref("theme", id); } },
+    el("div", { class: "sw" }, el("i", { style: left }), el("i", { style: right })),
+    el("div", { class: "n", textContent: name }), sub ? el("div", { class: "s2", textContent: sub }) : null)));
+}
+
+/* ---------- advanced recording ---------- */
+const CODEC_IDS = { Nvidia: { h264: "obs_nvenc_h264_tex", hevc: "obs_nvenc_hevc_tex", av1: "obs_nvenc_av1_tex" },
+  Amd: { h264: "h264_texture_amf", hevc: "h265_texture_amf", av1: "av1_texture_amf" },
+  Intel: { h264: "obs_qsv11_v2", hevc: "obs_qsv11_hevc", av1: "obs_qsv11_av1" } };
+function setPref(k, v) { return act("/api/pref", { key: k, value: v }); }
+function row(label, control, why) { return el("div", { class: "pref" }, el("label", { textContent: label }), control, el("div", { class: "why", textContent: why || "" })); }
+function choice(k, opts, p, disabled = []) {
+  const s = seg(opts, p[k], v => setPref(k, v));
+  s.querySelectorAll("button").forEach((b, i) => { if (disabled.includes(opts[i][0])) { b.disabled = true; b.title = "Not available on this PC"; } });
+  return s;
+}
+function number(k, p, min, max, step, unit) {
+  const inp = el("input", { type: "number", class: "field", min, max, step, value: p[k] });
+  inp.onchange = () => { const v = Math.round(Number(inp.value)); if (v >= min && v <= max) setPref(k, v); else { toast(`Between ${min} and ${max}`, true); inp.value = p[k]; } };
+  return el("div", { class: "numrow" }, inp, el("span", { class: "done", textContent: unit }));
+}
+function slider(k, p, min, max, fmt) {
+  const val = el("span", { class: "val", textContent: fmt(p[k]) });
+  const inp = el("input", { type: "range", min, max, step: 1, value: p[k] });
+  const paint = () => inp.style.setProperty("--fill", `${(Number(inp.value) - min) / (max - min) * 100}%`);
+  paint();
+  inp.oninput = () => { val.textContent = fmt(Number(inp.value)); paint(); };
+  inp.onchange = () => setPref(k, Number(inp.value));
+  return el("div", { class: "numrow" }, inp, val);
+}
+function select(k, opts, p) {
+  const s = el("select", {}, ...opts.map(([v, l]) => el("option", { value: v, textContent: l, selected: v === p[k] })));
+  s.onchange = () => setPref(k, typeof opts[0][0] === "number" ? Number(s.value) : s.value);
+  return s;
+}
+function perHour(kbps) { const gb = kbps * 3600 / 8 / 1e6; return gb >= 1 ? `about ${gb.toFixed(1)} GB per hour` : `about ${Math.round(gb * 1000)} MB per hour`; }
+function renderAdvanced() {
+  const p = state.prefs, a = state.app || {}, custom = p.quality === "custom";
+  const avail = (a.encoders || []).map(e => e.id), ids = CODEC_IDS[a.vendor] || {};
+  const isCpu = p.adv_encoder === "x264" || a.vendor === "Cpu";
+  const missing = ["hevc", "av1"].filter(c => isCpu || !ids[c] || (avail.length && !avail.includes(ids[c])));
+  $("#advnote").replaceChildren(el("span", { textContent: custom ? "Quality is set to Custom: the encoder settings below are used."
+      : "The encoder settings below are only used with Quality = Custom. Output, audio and performance settings always apply." }),
+    ...(custom ? [] : [el("button", { textContent: "Use custom", onclick: () => setPref("quality", "custom") })]));
+  $("#encnote").textContent = a.vendor === "Cpu" ? "no GPU encoder found: x264 (CPU)" : `${a.vendor} GPU` + (avail.length ? "" : " · codecs are confirmed after the first recording");
+  const rc = p.adv_rate_control;
+  const enc = [
+    row("Codec", choice("adv_codec", [["h264", "H.264"], ["hevc", "HEVC (H.265)"], ["av1", "AV1"]], p, missing),
+      { h264: "Plays everywhere (recommended for sharing).", hevc: "About 30% smaller at the same quality; not every site or player supports it.", av1: "Smallest files; needs an RTX 40 / RX 7000 / Arc GPU or newer." }[p.adv_codec]),
+    row("Encoder", choice("adv_encoder", [["auto", "GPU"], ["x264", "CPU (x264)"]], p),
+      p.adv_encoder === "x264" ? "Uses your processor: can cost FPS in games. H.264 only." : "Your graphics card's encoder: almost no FPS cost."),
+    row("Rate control", choice("adv_rate_control", [["cqp", "Constant quality"], ["vbr", "Variable bitrate"], ["cbr", "Constant bitrate"]], p),
+      { cqp: "Same quality everywhere; busy scenes get bigger. Best for recording.", vbr: "Aims for the bitrate, can go up to the maximum on busy scenes.", cbr: "Fixed bitrate: predictable file size." }[rc]),
+  ];
+  if (rc === "cqp") enc.push(row(isCpu ? "Quality (CRF)" : "Quality level (CQ)", slider("adv_cq", p, 1, 51, v => `${v} · ${v <= 16 ? "near lossless" : v <= 22 ? "great" : v <= 28 ? "good" : "small"}`), "Lower = better quality and bigger files. 18–23 is a good range."));
+  else {
+    enc.push(row("Bitrate", number("adv_bitrate", p, 1000, 200000, 1000, "kbps"), `${perHour(p.adv_bitrate)}. 1080p60: 20,000–40,000 · 1440p60: 40,000–60,000 · 4K60: 80,000+`));
+    if (rc === "vbr") enc.push(row("Max bitrate", number("adv_max_bitrate", p, 1000, 300000, 1000, "kbps"), "Upper limit on busy scenes (never below the bitrate)."));
+  }
+  enc.push(row("Encoder preset", slider("adv_preset", p, 1, 7, v => ["Fastest", "Faster", "Fast", "Medium", "Slow", "Slower", "Best quality"][v - 1]), "Slower = better quality per bit, more encoder work (GPU encoders handle Slower fine)."));
+  enc.push(row("Keyframe interval", number("adv_keyint", p, 1, 10, 1, "seconds"), "How often a full frame is stored. 2 s is standard; 1 s makes trimming more precise."));
+  enc.push(row("B-frames", choice("adv_bframes", [[0, "0"], [1, "1"], [2, "2"], [3, "3"], [4, "4"]], p), "More = smaller files; 2 is a good default."));
+  if (!isCpu && a.vendor === "Nvidia") enc.push(row("Look-ahead", choice("adv_lookahead", [[true, "On"], [false, "Off"]], p), "Better quality in fast scenes, slightly more GPU use."));
+  enc.push(row("Color depth", choice("adv_color", [["nv12", "8-bit"], ["p010", "10-bit"]], p, p.adv_codec === "h264" || isCpu ? ["p010"] : []), "10-bit: smoother gradients; HEVC/AV1 only."));
+  const encBox = $("#adv-enc"); encBox.replaceChildren(...enc); encBox.classList.toggle("dim", !custom);
+  const n = a.next || {};
+  $("#adv-out").replaceChildren(
+    row("Resolution", choice("adv_resolution", [[0, "Native"], [2160, "2160p"], [1440, "1440p"], [1080, "1080p"], [900, "900p"], [720, "720p"]], p),
+      `Monitor ${(n.base || "").replace("x", "×")} → recording ${(n.out || "").replace("x", "×")}. Never upscales.`),
+    row("Scale filter", choice("adv_scale_filter", [["lanczos", "Lanczos"], ["bicubic", "Bicubic"], ["bilinear", "Bilinear"], ["area", "Area"]], p), "Used when the resolution is lowered. Lanczos is the sharpest."),
+    row("Frame rate", select("adv_fps", [[0, `Basic setting (${p.fps} fps)`], [24, "24 fps"], [30, "30 fps"], [48, "48 fps"], [60, "60 fps"], [90, "90 fps"], [120, "120 fps"], [144, "144 fps"], [165, "165 fps"], [240, "240 fps"]], p), "Above 60 fps needs a fast encoder and makes bigger files."),
+    row("File format", choice("adv_format", [["hybrid_mp4", "Hybrid MP4"], ["hybrid_mov", "Hybrid MOV"], ["mkv", "MKV"], ["mp4", "MP4"]], p),
+      { hybrid_mp4: "Recommended: survives crashes, plays everywhere, kills become chapters.", hybrid_mov: "Like Hybrid MP4, in a MOV container.", mkv: "Survives crashes, but the Fragtape player can't play it and there are no chapters.", mp4: "Classic MP4: a crash during recording loses the file." }[p.adv_format]),
+  );
+  $("#adv-audio").replaceChildren(
+    row("Audio bitrate", choice("adv_audio_bitrate", [[96, "96"], [128, "128"], [160, "160"], [192, "192"], [256, "256"], [320, "320"]], p), "kbps (AAC). 192 is plenty for game audio."),
+    row("Sample rate", choice("adv_sample_rate", [[44100, "44.1 kHz"], [48000, "48 kHz"]], p), "48 kHz is standard for video."),
+    row("Audio tracks", choice("adv_tracks", [["single", "One mix"], ["separate", "Separate tracks"]], p),
+      p.adv_tracks === "separate" ? "Track 1 = everything, 2 = game, 3 = microphone, 4 = desktop, for editing later (the player plays track 1)." : "Everything mixed into one track."),
+  );
+  $("#adv-perf").replaceChildren(
+    row("Replay buffer memory", choice("adv_replay_mb", [[512, "512 MB"], [1024, "1 GB"], [2048, "2 GB"], [4096, "4 GB"], [8192, "8 GB"]], p), "RAM limit for Clips mode. High bitrates with long clips need more."),
+    row("OBS priority", choice("adv_priority", [["normal", "Normal"], ["above_normal", "Above normal"], ["high", "High"]], p), "Above normal avoids dropped frames when the game uses all the CPU."),
+  );
+}
+$("#advreset").onclick = () => { if (confirm("Reset all advanced recording settings to their defaults?")) act("/api/reset-advanced", {}); };
+$("#gsi").onclick = async () => { const r = await act("/api/install-gsi", {}); if (r) $("#gsiwhy").textContent = r.results.join(" · ") + ". Restart the game if it's running."; };
+
+/* ---------- refresh ---------- */
+let wasRecording = false;
+async function refresh(force) {
+  try {
+    state = await api("/api/state");
+    if (pageRev === null) pageRev = state.page_rev; else if (state.page_rev !== pageRev) return location.reload();
+    if (force) lastGames = "";
+    if (document.documentElement.dataset.theme !== (state.prefs.theme || "sharp")) applyTheme(state.prefs.theme);
+    renderLive(); renderGames(); renderSettings();
+    const busy = state.app.recording || state.app.replay;
+    if (wasRecording && !busy) setTimeout(() => loadClips(), 4000);  // a recording just finished
+    wasRecording = busy;
+  } catch (e) {
+    $("#live .what").textContent = "Fragtape is not running"; $("#live .sub").textContent = "Start it from the Start menu"; $("#live").className = "live off";
+  }
+}
+refresh(true); loadClips();
+{ const m = location.hash.match(/^#(games|settings)(?:\/(\w+))?$/); if (m) { show(m[1]); if (m[2]) showTab(m[2]); } }
+setInterval(refresh, 2000);
+setInterval(() => { if ($("#v-clips").classList.contains("on") && !current) loadClips(); }, 10000);
+setInterval(() => { if (state) renderLive(); }, 1000);
+</script>
+</body>
+</html>

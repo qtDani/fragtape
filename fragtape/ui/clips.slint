@@ -124,7 +124,7 @@ component Card inherits Rectangle {
         mouse-cursor: pointer;
         clicked => { if ClipsState.renaming != c.id { ClipsState.open(c.id); } }
         pointer-event(e) => {
-            if e.button == PointerEventButton.right && e.kind == PointerEventKind.up {
+            if e.button == PointerEventButton.right && e.kind == PointerEventKind.down {
                 root.menu-x = min(self.mouse-x, root.width - 170px);
                 root.menu-y = self.mouse-y;
                 menu.show();

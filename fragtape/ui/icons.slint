@@ -1,0 +1,90 @@
+// Vector icons on a 24x24 grid. Strokes scale with the icon size.
+export component Icon inherits Rectangle {
+    in property <string> name;
+    in property <color> tint: white;
+    in property <length> size: 20px;
+    width: size;
+    height: size;
+    property <length> sw: size / 24 * 2;      // a 2-unit stroke
+    property <length> sw2: size / 24 * 2.4;
+
+    // --- navigation ---
+    if name == "clips": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM10 8.5v7l6-3.5z"; }
+    if name == "games": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M7 7h10a5 5 0 0 1 4.9 6l-.8 4a2.5 2.5 0 0 1-4.3 1.2L14.5 16h-5l-2.3 2.2A2.5 2.5 0 0 1 2.9 17l-.8-4A5 5 0 0 1 7 7zM8 10v2H6v2h2v2h2v-2h2v-2h-2v-2zM16.5 11a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"; }
+    if name == "settings": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.4-2.9a7.4 7.4 0 0 0 1.7-1l2.5 1 2-3.5L19.4 13zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"; }
+    if name == "search": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M10 2a8 8 0 0 1 6.32 12.9l5.39 5.4-1.41 1.4-5.4-5.39A8 8 0 1 1 10 2zm0 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12z"; }
+
+    // --- player ---
+    if name == "play": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint; commands: "M8 5v14l11-7z"; }
+    if name == "pause": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint; commands: "M7 5h4v14H7zM13 5h4v14h-4z"; }
+    if name == "vol0" || name == "vol1" || name == "vol2": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M3 9v6h4l5 4V5L7 9z"; }
+    if name == "vol0": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw; stroke-line-cap: round;
+        commands: "M15.5 9.5l5 5M20.5 9.5l-5 5"; }
+    if name == "vol1" || name == "vol2": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw; stroke-line-cap: round;
+        commands: "M15 9a4 4 0 0 1 0 6"; }
+    if name == "vol2": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw; stroke-line-cap: round;
+        commands: "M17.5 6.5a7.5 7.5 0 0 1 0 11"; }
+    if name == "scissors": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw; stroke-line-cap: round;
+        commands: "M9 7a3 3 0 1 1-6 0 3 3 0 1 1 6 0zM9 17a3 3 0 1 1-6 0 3 3 0 1 1 6 0zM8.5 8.5L20 18M8.5 15.5L20 6"; }
+    if name == "close": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw; stroke-line-cap: round;
+        commands: "M6 6l12 12M18 6L6 18"; }
+    if name == "fullscreen": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw; stroke-line-cap: square;
+        commands: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"; }
+    if name == "back": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw; stroke-line-cap: round;
+        commands: "M15 5l-7 7 7 7"; }
+    if name == "star": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7L2 9.2l7.1-.6z"; }
+    if name == "star-outline": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw * 0.8;
+        commands: "M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7L2 9.2l7.1-.6z"; }
+    if name == "folder": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M3 5h6l2 2h10v12H3z"; }
+    if name == "trash": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M9 3h6l1 2h4v2H4V5h4zM6 9h12l-1 12H7z"; }
+
+    // --- moments ---
+    if name == "kill" || name == "first_blood" || name == "headshot": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: sw2;
+        commands: "M18.5 12a6.5 6.5 0 1 1-13 0 6.5 6.5 0 1 1 13 0zM12 2v5M12 17v5M2 12h5M17 12h5"; }
+    if name == "headshot": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M14.6 12a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 1 1 5.2 0z"; }
+    if name == "double_kill" || name == "triple_kill" || name == "quad_kill" || name == "penta_kill": Text {
+        text: name == "double_kill" ? "2" : name == "triple_kill" ? "3" : name == "quad_kill" ? "4" : "5";
+        color: tint; font-size: size * 0.78; font-weight: 900;
+        horizontal-alignment: center; vertical-alignment: center; }
+    if name == "ace": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7L2 9.2l7.1-.6z"; }
+    if name == "mvp": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M3 18h18l1.5-11-5.5 4-5-7-5 7-5.5-4z"; }
+    if name == "objective" || name == "objective_steal": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M5 3h2.2v18H5zM7 4h12l-3 4.5 3 4.5H7z"; }
+    if name == "structure": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M5 21V9l3-2V3h8v4l3 2v12h-5v-5h-4v5z"; }
+    if name == "manual": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: tint;
+        commands: "M6 2h12v20l-6-4.5L6 22z"; }
+    if name == "death": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: size / 24 * 2.6; stroke-line-cap: round;
+        commands: "M6 6l12 12M18 6L6 18"; }
+    if name == "assist": Path { width: size; height: size; viewbox-width: 24; viewbox-height: 24; fill: transparent; stroke: tint; stroke-width: size / 24 * 2.6; stroke-line-cap: round;
+        commands: "M12 5v14M5 12h14"; }
+}
+
+// The Fragtape bomb, drawn like the tray icon. `hole` is the colour behind it (the eye and smile).
+export component Logo inherits Rectangle {
+    in property <color> tint: white;
+    in property <brush> hole: black;
+    in property <length> size: 28px;
+    width: size;
+    height: size;
+    Path { width: size; height: size; viewbox-width: 100; viewbox-height: 100; fill: tint;
+        commands: "M16 62L21 44 35 33 53 31 69 38 79 54 78 72 66 86 47 91 29 85 18 75Z"; }
+    Path { width: size; height: size; viewbox-width: 100; viewbox-height: 100; fill: hole;
+        commands: "M45 58a9 9 0 1 1-18 0 9 9 0 1 1 18 0zM53 59L67 54 68 60 54 63ZM38 75Q48 81 60 74L57 80Q48 85 40 80Z"; }
+    Path { width: size; height: size; viewbox-width: 100; viewbox-height: 100; fill: tint; commands: "M58 34L64 26 74 31 69 39Z"; }
+    Path { width: size; height: size; viewbox-width: 100; viewbox-height: 100; fill: transparent; stroke: tint; stroke-width: size / 100 * 4.5; stroke-line-cap: round;
+        commands: "M69 28Q74 14 86 14"; }
+    Path { width: size; height: size; viewbox-width: 100; viewbox-height: 100; fill: #ff8a1c;
+        commands: "M88 4L90 11 97 10 91 15 95 21 88 18 84 24 84 16 77 14 84 11Z"; }
+}

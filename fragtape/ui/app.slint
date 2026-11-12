@@ -1,0 +1,228 @@
+import { Palette } from "theme.slint";
+import { Btn, Opt } from "widgets.slint";
+import { Icon, Logo } from "icons.slint";
+import { ClipsPage, ClipsState, ClipCard, ClipGroup } from "clips.slint";
+import { GamesPage, GamesState, GameRow, Found } from "games.slint";
+import { SettingsPage, SettingsState, SRow, ThemeCard, Swatch } from "settings.slint";
+import { Player, PlayerState, Pin, Span, Stat, Detail } from "player.slint";
+
+export { Palette, Opt, ClipsState, ClipCard, ClipGroup, GamesState, GameRow, Found, SettingsState, SRow, ThemeCard, Swatch, PlayerState, Pin, Span, Stat, Detail }
+
+export global AppState {
+    in-out property <string> page: "clips";
+    in property <bool> player-open;
+    in property <string> clips-count;
+    in property <string> games-count;
+    // the live box in the sidebar
+    in property <string> live-title: "Starting…";
+    in property <string> live-sub;
+    in property <string> live-timer;
+    in property <string> live-state;      // rec · clip · watching · off
+    in property <bool> can-mark;
+    in property <bool> can-stop;
+    in property <string> mark-text: "Save highlight";
+    // screen recording: shown unless a game is being recorded
+    in property <bool> can-screen;
+    in property <bool> screen-on;
+    in property <string> screen-key;
+    // first-time question
+    in property <string> asking;
+    // OBS missing
+    in property <bool> obs-missing;
+    in property <bool> obs-installing;
+    in property <string> obs-note;
+    // a short message at the bottom
+    in property <string> toast;
+    in property <bool> toast-error;
+    callback nav(string);
+    callback mark();
+    callback stop();
+    callback screen();
+    callback answer(string, string);
+    callback obs(string);                 // install · download · browse
+}
+
+// Record / stop the whole screen: a red dot (a square while recording) and a label.
+component RecBtn inherits Rectangle {
+    in property <bool> on;
+    in property <string> key;
+    callback clicked;
+    height: 32px;
+    border-radius: Palette.r-lg;
+    border-width: 1px;
+    border-color: on ? #ef4444 : (ta.has-hover ? Palette.hover-line : Palette.line);
+    background: on ? (ta.has-hover ? #ef444440 : #ef444426) : (ta.has-hover ? Palette.card-hi : Palette.card);
+    animate background { duration: Palette.anim; }
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 8px;
+        Rectangle {
+            width: 10px; height: 10px; y: (parent.height - 10px) / 2;
+            border-radius: on ? 2px : 5px;
+            background: Palette.rec;
+        }
+        Text { text: on ? "Stop recording" : "Record screen"; color: Palette.text; font-size: Palette.fs; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+        if key != "": Text { text: key; color: Palette.faint; font-size: Palette.fs - 1.5px; vertical-alignment: center; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> icon;
+    in property <string> text;
+    in property <string> count;
+    in property <bool> on;
+    callback clicked;
+    height: 38px;
+    border-radius: Palette.r-sm;
+    background: on ? (Palette.gloss ? @linear-gradient(180deg, #96d7ff73 0%, #3c8cd259 50%, #145aaa73 51%, #50aaf066 100%) : Palette.sel)
+        : (ta.has-hover ? Palette.card : transparent);
+    Rectangle { x: 0; width: on ? Palette.bar : 0; background: Palette.accent; }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        spacing: 12px;
+        Icon { y: (parent.height - 18px) / 2; name: root.icon; size: 18px; tint: on ? Palette.text : Palette.muted; }
+        Text { text: root.text; color: on ? (Palette.blocks ? Palette.on-accent : Palette.text) : Palette.muted; font-size: Palette.fs + 1px; vertical-alignment: center; horizontal-stretch: 1; }
+        Text { text: root.count; color: Palette.faint; font-size: Palette.fs - 1.5px; vertical-alignment: center; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+export component AppWindow inherits Window {
+    title: "Fragtape";
+    in property <image> app-icon;
+    icon: app-icon;
+    preferred-width: 1280px;
+    preferred-height: 860px;
+    min-width: 900px;
+    min-height: 600px;
+    background: Palette.window-bg;
+    default-font-family: "Segoe UI";
+    default-font-size: Palette.fs;
+    in property <bool> fullscreen;
+
+    HorizontalLayout {
+        // ---- sidebar ----
+        if !PlayerState.fullscreen: Rectangle {
+            width: 210px;
+            background: Palette.side;
+            Rectangle { x: parent.width - 1px; width: 1px; background: Palette.line; }
+            VerticalLayout {
+                padding: 10px;
+                padding-top: 16px;
+                spacing: 4px;
+                HorizontalLayout {
+                    padding-left: 8px;
+                    padding-bottom: 14px;
+                    spacing: 10px;
+                    alignment: start;
+                    Logo { size: 28px; tint: Palette.text; hole: Palette.gloss ? #1d3248 : Palette.side-color; }
+                    Text { text: "Fragtape"; color: Palette.text; font-size: Palette.fs + 3px; font-weight: 700; vertical-alignment: center; }
+                }
+                NavItem { icon: "clips"; text: "Tapes"; count: AppState.clips-count; on: AppState.page == "clips"; clicked => { AppState.nav("clips"); } }
+                NavItem { icon: "games"; text: "Games"; count: AppState.games-count; on: AppState.page == "games"; clicked => { AppState.nav("games"); } }
+                NavItem { icon: "settings"; text: "Settings"; on: AppState.page == "settings"; clicked => { AppState.nav("settings"); } }
+                Rectangle { vertical-stretch: 1; }
+                // live status
+                Rectangle {
+                    background: Palette.panel;
+                    border-radius: Palette.r-lg;
+                    border-width: 1px;
+                    border-color: AppState.live-state == "rec" ? #ef444466 : Palette.line;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Rectangle {
+                                width: 9px; height: 9px; y: 5px;
+                                border-radius: 4.5px;
+                                background: AppState.live-state == "rec" ? Palette.rec : AppState.live-state == "clip" ? Palette.clip
+                                    : AppState.live-state == "off" ? Palette.faint : Palette.ok;
+                            }
+                            Text { text: AppState.live-title; color: Palette.text; font-size: Palette.fs; font-weight: 600; overflow: elide; horizontal-stretch: 1; }
+                            Text { text: AppState.live-timer; color: Palette.muted; font-size: Palette.fs - 1px; }
+                        }
+                        Text { text: AppState.live-sub; color: Palette.muted; font-size: Palette.fs - 1.5px; wrap: word-wrap; }
+                        if AppState.can-mark: Btn { text: AppState.mark-text; clicked => { AppState.mark(); } }
+                        if AppState.can-stop: Btn { text: "Stop recording"; clicked => { AppState.stop(); } }
+                        if AppState.can-screen: RecBtn { on: AppState.screen-on; key: AppState.screen-key; clicked => { AppState.screen(); } }
+                    }
+                }
+            }
+        }
+
+        // ---- pages ----
+        Rectangle {
+            horizontal-stretch: 1;
+            background: Palette.gloss ? #0a0e1499 : Palette.bg;
+            if !AppState.player-open: VerticalLayout {
+                padding-left: 28px;
+                padding-right: 28px;
+                padding-top: 22px;
+                padding-bottom: 18px;
+                spacing: 14px;
+                // first-time question
+                if AppState.asking != "": Rectangle {
+                    border-radius: Palette.r-lg;
+                    border-width: 1px;
+                    border-color: Palette.accent;
+                    background: Palette.panel;
+                    VerticalLayout {
+                        padding: 14px;
+                        spacing: 10px;
+                        Text { text: "New game: " + AppState.asking + ". What should Fragtape record?"; color: Palette.text; font-size: Palette.fs + 1px; font-weight: 600; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            Btn { text: "Record whole session"; primary: true; clicked => { AppState.answer(AppState.asking, "full"); } }
+                            Btn { text: "Only highlights"; clicked => { AppState.answer(AppState.asking, "highlights"); } }
+                            Btn { text: "Nothing"; clicked => { AppState.answer(AppState.asking, "off"); } }
+                        }
+                    }
+                }
+                // OBS missing
+                if AppState.obs-missing && AppState.page == "clips": Rectangle {
+                    border-radius: Palette.r-lg;
+                    border-width: 1px;
+                    border-color: #f59e0b5a;
+                    background: #f59e0b1f;
+                    VerticalLayout {
+                        padding: 12px;
+                        spacing: 6px;
+                        Text { text: "Fragtape needs OBS Studio to record."; color: Palette.light ? #92400e : #fde68a; font-size: Palette.fs + 1px; font-weight: 700; }
+                        Text { text: "OBS is free. Fragtape runs it hidden in the background, so you never have to open it yourself."; color: Palette.light ? #92400e : #fde68a; font-size: Palette.fs; wrap: word-wrap; }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            if AppState.obs-installing: Text { text: "Installing OBS Studio… (Windows may ask for permission)"; color: Palette.text; vertical-alignment: center; }
+                            if !AppState.obs-installing: Btn { text: "Install OBS Studio"; primary: true; clicked => { AppState.obs("install"); } }
+                            Btn { text: "Download page"; clicked => { AppState.obs("download"); } }
+                            Btn { text: "I already have it…"; clicked => { AppState.obs("browse"); } }
+                        }
+                        if AppState.obs-note != "": Text { text: AppState.obs-note; color: Palette.light ? #92400e : #fde68a; font-size: Palette.fs - 1px; wrap: word-wrap; }
+                    }
+                }
+                if AppState.page == "clips": ClipsPage { vertical-stretch: 1; }
+                if AppState.page == "games": GamesPage { vertical-stretch: 1; }
+                if AppState.page == "settings": SettingsPage { vertical-stretch: 1; }
+            }
+            if AppState.player-open: Player { }
+        }
+    }
+
+    // a short message at the bottom
+    if AppState.toast != "": Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: parent.height - self.height - 24px;
+        width: min(parent.width - 40px, tt.preferred-width + 32px);
+        height: tt.preferred-height + 18px;
+        border-radius: Palette.r-lg;
+        background: AppState.toast-error ? #7f1d1d : Palette.card-hi;
+        border-width: 1px;
+        border-color: AppState.toast-error ? #ef4444 : Palette.line;
+        tt := Text { text: AppState.toast; color: Palette.text; font-size: Palette.fs; wrap: word-wrap; horizontal-alignment: center; width: parent.width - 32px; }
+    }
+}

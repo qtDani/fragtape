@@ -207,8 +207,8 @@ pub fn make_dpi_aware() {
     }
 }
 
-/// Pixel size of the monitor the game's window is on (else the primary monitor).
-pub fn monitor_size(pids: &[u32]) -> (u32, u32) {
+/// The monitor the game's window is on (else the primary monitor).
+fn game_monitor(pids: &[u32]) -> HMONITOR {
     unsafe {
         let mut mon: HMONITOR = std::ptr::null_mut();
         if let Some(w) = (!pids.is_empty()).then(|| main_window(pids)).flatten() {
@@ -217,6 +217,41 @@ pub fn monitor_size(pids: &[u32]) -> (u32, u32) {
         if mon.is_null() {
             mon = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
         }
+        mon
+    }
+}
+
+/// The monitor's device interface path ("\?\DISPLAY#...#{e6f07b5f-...}"): what OBS's
+/// monitor capture wants as `monitor_id` (it ignores the old numeric `monitor`).
+pub fn monitor_device_id(pids: &[u32]) -> Option<String> {
+    unsafe {
+        let mon = game_monitor(pids);
+        let mut info: MONITORINFOEXW = std::mem::zeroed();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if mon.is_null() || GetMonitorInfoW(mon, &mut info as *mut _ as *mut MONITORINFO) == 0 {
+            return None;
+        }
+        let mut first = None;
+        for i in 0..8 {
+            let mut dd: DISPLAY_DEVICEW = std::mem::zeroed();
+            dd.cb = std::mem::size_of::<DISPLAY_DEVICEW>() as u32;
+            if EnumDisplayDevicesW(info.szDevice.as_ptr(), i, &mut dd, EDD_GET_DEVICE_INTERFACE_NAME) == 0 {
+                break;
+            }
+            let id = String::from_utf16_lossy(&dd.DeviceID[..dd.DeviceID.iter().position(|&c| c == 0).unwrap_or(dd.DeviceID.len())]);
+            if dd.StateFlags & DISPLAY_DEVICE_ACTIVE != 0 {
+                return Some(id);
+            }
+            first.get_or_insert(id);
+        }
+        first
+    }
+}
+
+/// Pixel size of the monitor the game's window is on (else the primary monitor).
+pub fn monitor_size(pids: &[u32]) -> (u32, u32) {
+    unsafe {
+        let mon = game_monitor(pids);
         let mut info: MONITORINFO = std::mem::zeroed();
         info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
         if !mon.is_null() && GetMonitorInfoW(mon, &mut info) != 0 {
@@ -384,4 +419,17 @@ pub fn pick_file(title: &str, filter: (&str, &str), start_dir: Option<&Path>) ->
     if let Some(d) = &dir { ofn.lpstrInitialDir = d.as_ptr(); }
     ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_EXPLORER;
     (unsafe { GetOpenFileNameW(&mut ofn) } != 0).then(|| from_wide(&buf))
+}
+
+/// A Yes/No question in a standard Windows message box (owned by the active window).
+pub fn confirm(title: &str, text: &str) -> bool {
+    unsafe { MessageBoxW(GetForegroundWindow(), wide(text).as_ptr(), wide(title).as_ptr(), MB_YESNO | MB_ICONQUESTION) == IDYES }
+}
+
+/// Set a window's title-bar (small) and taskbar (big) icons.
+pub fn set_window_icons(hwnd: isize, small: isize, big: isize) {
+    unsafe {
+        SendMessageW(hwnd as HWND, WM_SETICON, ICON_SMALL as WPARAM, small as LPARAM);
+        SendMessageW(hwnd as HWND, WM_SETICON, ICON_BIG as WPARAM, big as LPARAM);
+    }
 }

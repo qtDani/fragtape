@@ -107,7 +107,7 @@ impl ClipStore {
                     "kind": kind, "title": info["title"].as_str().map(String::from).unwrap_or_else(|| title_from_name(&stem)),
                     "size": m.len(), "mtime": mtime(&m), "duration": duration, "live": is_live,
                     "markers": markers, "highlights": highlights,
-                    "thumb": self.thumbs.join(format!("{id}.jpg")).exists(), "favorite": info["favorite"] == true,
+                    "thumb": self.thumb_path(&id).is_some(), "favorite": info["favorite"] == true,
                 }));
                 index.insert(id, p);
             }
@@ -153,12 +153,21 @@ impl ClipStore {
         fs::write(self.thumbs.join(format!("{id}.jpg")), jpeg).map_err(|e| e.to_string())
     }
 
+    /// A thumbnail made by the native window (PNG) or the HTML one (JPEG).
     pub fn thumb_path(&self, id: &str) -> Option<PathBuf> {
         if !id.chars().all(|c| c.is_ascii_hexdigit()) {
             return None;
         }
-        let p = self.thumbs.join(format!("{id}.jpg"));
-        p.exists().then_some(p)
+        ["png", "jpg"].iter().map(|ext| self.thumbs.join(format!("{id}.{ext}"))).find(|p| p.exists())
+    }
+
+    /// Store a PNG thumbnail made by the native window.
+    pub fn save_thumb_png(&self, id: &str, png: &[u8]) -> Result<(), String> {
+        if self.path_for(id).is_none() || !png.starts_with(&[0x89, b'P', b'N', b'G']) || !id.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err("not a png".into());
+        }
+        fs::create_dir_all(&self.thumbs).map_err(|e| e.to_string())?;
+        fs::write(self.thumbs.join(format!("{id}.png")), png).map_err(|e| e.to_string())
     }
 
     /// Move to the Recycle Bin (a mis-click can be undone).
@@ -170,6 +179,7 @@ impl ClipStore {
         meta.remove(&rel);
         self.save(&meta);
         let _ = fs::remove_file(self.thumbs.join(format!("{id}.jpg")));
+        let _ = fs::remove_file(self.thumbs.join(format!("{id}.png")));
         Ok(())
     }
 

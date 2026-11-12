@@ -1,0 +1,427 @@
+import { Palette } from "theme.slint";
+import { Btn, Slide } from "widgets.slint";
+import { Icon } from "icons.slint";
+
+export struct Pin { x: float, kind: string, color: color, label: string, offset: float }
+export struct Span { a: float, b: float }
+export struct Stat { cat: string, kind: string, label: string, count: int, color: color }
+export struct Detail { k: string, v: string }
+
+export global PlayerState {
+    in property <string> title;
+    in property <string> sub;
+    in property <image> frame;
+    in property <bool> playing;
+    in property <bool> loading;
+    in property <string> time-text: "0:00 / 0:00";
+    in property <float> pos;           // 0..1
+    in property <float> buffered;      // 0..1
+    in property <float> volume: 1;
+    in property <bool> muted;
+    in property <string> rate-text: "1×";
+    in property <[Pin]> pins;
+    in property <[Span]> spans;
+    in property <bool> sel-on;
+    in property <float> sel-a;
+    in property <float> sel-b;
+    in property <string> sel-text;
+    in property <bool> can-save;
+    in property <bool> saving;
+    in property <string> note;         // under the video (ffmpeg missing...)
+    in property <bool> need-ffmpeg;
+    in property <bool> hover-on;
+    in property <float> hover-x;
+    in property <image> hover-img;
+    in property <string> hover-text;
+    in property <[Stat]> stats;        // kills, deaths, assists, other (empty: no moments)
+    in property <string> kda;
+    in property <int> moment-count;
+    in property <string> now-kind;     // the moment just passed
+    in property <color> now-color;
+    in property <string> now-label;
+    in property <string> now-detail;
+    in property <[Detail]> details;
+    in property <string> empty-moments;
+    in property <bool> favorite;
+    in property <bool> idle;           // hide the controls while watching
+    in property <bool> fullscreen;
+    // the size the video is shown at, so Rust can ask the GPU for frames that size
+    in-out property <length> video-w;
+    in-out property <length> video-h;
+
+    callback toggle-play();
+    callback seek(float);              // 0..1, on press
+    callback drag(float);              // 0..1, while dragging
+    callback drag-end();
+    callback hover(float);
+    callback hover-out();
+    callback jump(float);              // seconds (3 s lead-in added by Rust)
+    callback jump-cat(string);         // next moment of this kind
+    callback step-moment(int);         // -1 / +1
+    callback set-volume(float);
+    callback toggle-mute();
+    callback speed();
+    callback toggle-fullscreen();
+    callback trim-start();
+    callback trim-cancel();
+    callback trim-save();
+    callback trim-move(int, float);    // handle 0/1, 0..1
+    callback back();
+    callback fav();
+    callback reveal();
+    callback delete();
+    callback rename(string);
+    callback key(string, bool);        // key text, shift
+    callback poke();                   // the mouse moved: show the controls
+    callback install-ffmpeg();
+}
+
+component CtlBtn inherits Rectangle {
+    in property <string> icon;
+    in property <string> text;
+    callback clicked;
+    width: text == "" ? 32px : max(40px, t.preferred-width + 14px);
+    height: 32px;
+    border-radius: Palette.r-sm;
+    background: ta.has-hover ? #ffffff24 : transparent;
+    if icon != "": Icon { name: root.icon; tint: white; size: 20px; }
+    t := Text { text: root.text; color: white; font-size: 12.5px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+component SideHead inherits Text {
+    font-size: Palette.fs - 1.5px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    color: Palette.muted;
+}
+
+// A count you can click: jumps to the next moment of that kind.
+component StatTile inherits Rectangle {
+    in property <Stat> stat;
+    height: 62px;
+    border-radius: Palette.r-sm;
+    background: stat.count > 0 && ta.has-hover ? Palette.card-hi : Palette.card;
+    border-width: 1px;
+    border-color: stat.count > 0 && ta.has-hover ? stat.color : transparent;
+    animate background { duration: Palette.anim; }
+    VerticalLayout {
+        padding-left: 10px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+        alignment: center;
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+            Rectangle { width: 16px; Icon { name: stat.kind; tint: stat.count > 0 ? stat.color : Palette.faint; size: 15px; } }
+            Text { text: stat.count; color: stat.count > 0 ? Palette.text : Palette.faint; font-size: Palette.fs + 7px; font-weight: 700; vertical-alignment: center; }
+        }
+        Text { text: stat.label; color: Palette.muted; font-size: Palette.fs - 1.5px; }
+    }
+    ta := TouchArea {
+        mouse-cursor: stat.count > 0 ? pointer : default;
+        clicked => { if stat.count > 0 { PlayerState.jump-cat(stat.cat); } }
+    }
+}
+
+export component Player inherits Rectangle {
+    background: PlayerState.fullscreen ? black : Palette.gloss ? transparent : Palette.bg;
+    property <bool> narrow: self.width < 1000px;
+    forward-focus: keys;
+
+    init => { keys.focus(); }
+    keys := FocusScope {
+        key-pressed(e) => {
+            PlayerState.key(e.text, e.modifiers.shift);
+            accept
+        }
+    }
+
+    VerticalLayout {
+        padding-left: PlayerState.fullscreen ? 0 : 28px;
+        padding-right: PlayerState.fullscreen ? 0 : 28px;
+        padding-top: PlayerState.fullscreen ? 0 : 18px;
+        padding-bottom: PlayerState.fullscreen ? 0 : 20px;
+        spacing: PlayerState.fullscreen ? 0 : 14px;
+
+        // title row
+        if !PlayerState.fullscreen: HorizontalLayout {
+            spacing: 12px;
+            Btn { text: "← Back"; clicked => { PlayerState.back(); } }
+            title := TextInput {
+                text: PlayerState.title;
+                font-size: 18px;
+                font-weight: 600;
+                color: Palette.text;
+                vertical-alignment: center;
+                single-line: true;
+                horizontal-stretch: 0;
+                width: max(80px, self.preferred-width + 8px);
+                accepted => { PlayerState.rename(self.text); keys.focus(); }
+            }
+            Text { text: PlayerState.sub; color: Palette.muted; font-size: Palette.fs; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+        }
+
+        // the stage: video (+ controls) and the moments list
+        stage := GridLayout {
+            spacing: PlayerState.fullscreen ? 0 : 18px;
+            Row {
+                VerticalLayout {
+                    // fullscreen: the video takes the whole screen, no gaps around it
+                    spacing: PlayerState.fullscreen ? 0 : 12px;
+                    horizontal-stretch: 1;
+                    vp := Rectangle {
+                        background: black;
+                        border-radius: PlayerState.fullscreen ? 0 : Palette.r-lg;
+                        clip: true;
+                        // keep 16:9, but never taller than the window allows
+                        min-height: 200px;
+                        preferred-height: min(self.width * 9 / 16, root.height - (PlayerState.fullscreen ? 0 : 190px));
+                        vertical-stretch: PlayerState.fullscreen ? 1 : 0;
+                        init => { PlayerState.video-w = self.width; PlayerState.video-h = self.height; }
+                        changed width => { PlayerState.video-w = self.width; }
+                        changed height => { PlayerState.video-h = self.height; }
+
+                        Image { source: PlayerState.frame; width: parent.width; height: parent.height; image-fit: contain; }
+                        TouchArea {
+                            mouse-cursor: PlayerState.idle ? MouseCursor.none : pointer;
+                            clicked => { PlayerState.toggle-play(); keys.focus(); }
+                            double-clicked => { PlayerState.toggle-fullscreen(); }
+                            changed mouse-x => { PlayerState.poke(); }
+                            changed mouse-y => { PlayerState.poke(); }
+                        }
+                        if PlayerState.loading: Text { text: "Loading…"; color: #ffffffaa; font-size: 14px; }
+                        // big play button while paused
+                        if !PlayerState.playing && !PlayerState.loading: Rectangle {
+                            width: 64px; height: 64px;
+                            y: parent.height * 0.45 - 32px;
+                            border-radius: Palette.r-lg;
+                            background: big.has-hover ? Palette.accent : #0000008c;
+                            Icon { name: "play"; tint: white; size: 34px; }
+                            big := TouchArea { mouse-cursor: pointer; clicked => { PlayerState.toggle-play(); keys.focus(); } }
+                        }
+
+                        // controls, over the bottom of the video
+                        ctrl := Rectangle {
+                            y: parent.height - self.height;
+                            height: 118px;
+                            opacity: PlayerState.idle ? 0 : 1;
+                            animate opacity { duration: 200ms; }
+                            background: @linear-gradient(180deg, #00000000 0%, #000000d0 60%, #000000d0 100%);
+                            TouchArea { changed mouse-x => { PlayerState.poke(); } changed mouse-y => { PlayerState.poke(); } }
+
+                            property <length> bar-x: 14px;
+                            property <length> bar-w: self.width - 28px;
+                            // moment icons above the bar
+                            for p in PlayerState.pins: Rectangle {
+                                x: ctrl.bar-x + ctrl.bar-w * p.x - 10px;
+                                y: 30px;
+                                width: 20px; height: 20px;
+                                border-radius: Palette.r-sm;
+                                background: #0c0c0cd9;
+                                border-width: pa.has-hover ? 2px : 1px;
+                                border-color: pa.has-hover ? p.color : #ffffff2e;
+                                Icon { name: p.kind; tint: p.color; size: 14px; }
+                                Rectangle { x: 9.5px; y: 20px; width: 1px; height: 4px; background: p.color; opacity: 0.7; }
+                                pa := TouchArea { mouse-cursor: pointer; clicked => { PlayerState.jump(p.offset); keys.focus(); } }
+                            }
+                            // the bar
+                            bar := Rectangle {
+                                x: ctrl.bar-x;
+                                y: 54px;
+                                width: ctrl.bar-w;
+                                height: 16px;
+                                property <length> th: ba.has-hover || ba.pressed ? 7px : 4px;
+                                Rectangle {
+                                    y: (parent.height - bar.th) / 2;
+                                    height: bar.th;
+                                    background: #ffffff38;
+                                    Rectangle { x: 0; width: parent.width * PlayerState.buffered; background: #ffffff38; }
+                                    for s in PlayerState.spans: Rectangle { x: parent.width * s.a; width: parent.width * (s.b - s.a); background: #f59e0b8c; }
+                                    Rectangle { x: 0; width: parent.width * PlayerState.pos; background: Palette.accent; }
+                                }
+                                if ba.has-hover || ba.pressed: Rectangle {
+                                    x: parent.width * PlayerState.pos - 6px;
+                                    y: 2px; width: 12px; height: 12px;
+                                    background: white; border-radius: Palette.r-sm;
+                                }
+                                ba := TouchArea {
+                                    mouse-cursor: pointer;
+                                    pointer-event(e) => {
+                                        if (e.kind == PointerEventKind.down && e.button == PointerEventButton.left) { PlayerState.seek(max(0, min(1, self.mouse-x / self.width))); }
+                                        if (e.kind == PointerEventKind.up) { PlayerState.drag-end(); keys.focus(); }
+                                    }
+                                    moved => {
+                                        if (self.pressed) { PlayerState.drag(max(0, min(1, self.mouse-x / self.width))); }
+                                    }
+                                    changed mouse-x => {
+                                        if (self.has-hover) { PlayerState.hover(max(0, min(1, self.mouse-x / self.width))); }
+                                    }
+                                    changed has-hover => { if (!self.has-hover) { PlayerState.hover-out(); } }
+                                }
+                                // the trim box with its two handles
+                                if PlayerState.sel-on: Rectangle {
+                                    x: parent.width * PlayerState.sel-a;
+                                    width: parent.width * (PlayerState.sel-b - PlayerState.sel-a);
+                                    border-width: 2px; border-color: white;
+                                    background: #ffffff24;
+                                    for i in 2: Rectangle {
+                                        x: i == 0 ? -5px : parent.width - 3px;
+                                        y: -3px; width: 8px; height: parent.height + 6px;
+                                        background: white;
+                                        ha := TouchArea {
+                                            mouse-cursor: ew-resize;
+                                            moved => {
+                                                if (self.pressed) {
+                                                    PlayerState.trim-move(i, max(0, min(1, (self.absolute-position.x + self.mouse-x - bar.absolute-position.x) / bar.width)));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // the buttons
+                            HorizontalLayout {
+                                x: 8px;
+                                y: 76px;
+                                width: parent.width - 16px;
+                                height: 36px;
+                                spacing: 6px;
+                                CtlBtn { icon: PlayerState.playing ? "pause" : "play"; clicked => { PlayerState.toggle-play(); keys.focus(); } }
+                                vol := HorizontalLayout {
+                                    spacing: 4px;
+                                    horizontal-stretch: 0;
+                                    alignment: start;
+                                    CtlBtn {
+                                        icon: PlayerState.muted || PlayerState.volume == 0 ? "vol0" : PlayerState.volume < 0.5 ? "vol1" : "vol2";
+                                        clicked => { PlayerState.toggle-mute(); keys.focus(); }
+                                    }
+                                    Rectangle {
+                                        width: 86px;
+                                        Slide {
+                                            w: 80px;
+                                            value: PlayerState.muted ? 0 : PlayerState.volume;
+                                            moved(v) => { PlayerState.set-volume(v); }
+                                        }
+                                    }
+                                }
+                                Text { text: PlayerState.time-text; color: white; font-size: 12.5px; vertical-alignment: center; horizontal-stretch: 0; }
+                                Rectangle { horizontal-stretch: 100; }
+                                // trim
+                                if !PlayerState.sel-on: CtlBtn { icon: "scissors"; clicked => { PlayerState.trim-start(); keys.focus(); } }
+                                if PlayerState.sel-on: Rectangle {
+                                    width: rng.preferred-width + 16px;
+                                    border-width: 1px; border-color: #ffffff5a;
+                                    rng := Text { text: PlayerState.sel-text; color: white; font-size: 12.5px; vertical-alignment: center; horizontal-alignment: center; }
+                                }
+                                if PlayerState.sel-on: Btn {
+                                    text: PlayerState.saving ? "Saving…" : "Save clip";
+                                    primary: true;
+                                    enabled: PlayerState.can-save && !PlayerState.saving;
+                                    clicked => { PlayerState.trim-save(); }
+                                }
+                                if PlayerState.sel-on: CtlBtn { icon: "close"; clicked => { PlayerState.trim-cancel(); keys.focus(); } }
+                                CtlBtn { text: PlayerState.rate-text; clicked => { PlayerState.speed(); keys.focus(); } }
+                                CtlBtn { icon: "fullscreen"; clicked => { PlayerState.toggle-fullscreen(); keys.focus(); } }
+                            }
+                            // hover preview, above the moment icons
+                            if PlayerState.hover-on: Rectangle {
+                                x: max(0, min(parent.width - 196px, ctrl.bar-x + ctrl.bar-w * PlayerState.hover-x - 98px));
+                                y: -110px;
+                                width: 196px;
+                                height: 136px;
+                                Rectangle {
+                                    y: 0; height: 112px;
+                                    border-width: 2px; border-color: white; background: #111111;
+                                    Image { x: 2px; y: 2px; width: 192px; height: 108px; source: PlayerState.hover-img; image-fit: contain; }
+                                }
+                                Rectangle {
+                                    y: 116px; height: 20px;
+                                    width: ht.preferred-width + 14px;
+                                    background: #000000d9;
+                                    ht := Text { text: PlayerState.hover-text; color: white; font-size: 12px; font-weight: 600; }
+                                }
+                            }
+                        }
+                    }
+                    // under the video
+                    if !PlayerState.fullscreen: HorizontalLayout {
+                        spacing: 8px;
+                        alignment: end;
+                        Btn { text: PlayerState.favorite ? "★ Favorite" : "☆ Favorite"; clicked => { PlayerState.fav(); } }
+                        Btn { text: "Show in folder"; clicked => { PlayerState.reveal(); } }
+                        Btn { text: "Delete"; danger: true; clicked => { PlayerState.delete(); } }
+                    }
+                    if !PlayerState.fullscreen && PlayerState.note != "": HorizontalLayout {
+                        spacing: 8px;
+                        alignment: start;
+                        Text { text: PlayerState.note; color: Palette.faint; font-size: Palette.fs - 1px; vertical-alignment: center; }
+                        if PlayerState.need-ffmpeg: Btn { text: "Install ffmpeg"; clicked => { PlayerState.install-ffmpeg(); } }
+                    }
+                    if !narrow && !PlayerState.fullscreen: Rectangle { vertical-stretch: 1; }
+                }
+                // beside the video: a summary of the match, moment navigation and the file's details
+                if !narrow && !PlayerState.fullscreen: Rectangle {
+                    width: 280px;
+                    vertical-stretch: 1;
+                    background: Palette.panel;
+                    border-radius: Palette.r-lg;
+                    border-width: 1px;
+                    border-color: Palette.line;
+                    VerticalLayout {
+                        padding: 14px;
+                        spacing: 10px;
+                        alignment: start;
+                        SideHead { text: "SUMMARY"; }
+                        if PlayerState.stats.length == 0: Text { text: PlayerState.empty-moments; color: Palette.faint; font-size: Palette.fs - 1px; wrap: word-wrap; }
+                        if PlayerState.stats.length > 0: GridLayout {
+                            spacing: 8px;
+                            Row {
+                                StatTile { stat: PlayerState.stats[0]; }
+                                StatTile { stat: PlayerState.stats[1]; }
+                            }
+                            Row {
+                                StatTile { stat: PlayerState.stats[2]; }
+                                StatTile { stat: PlayerState.stats[3]; }
+                            }
+                        }
+                        if PlayerState.kda != "": Text { text: PlayerState.kda; color: Palette.muted; font-size: Palette.fs - 1px; }
+
+                        Rectangle { height: 1px; background: Palette.line; }
+                        SideHead { text: "MOMENTS"; }
+                        Rectangle {
+                            height: 52px;
+                            border-radius: Palette.r-sm;
+                            background: Palette.card;
+                            HorizontalLayout {
+                                padding-left: 10px;
+                                padding-right: 10px;
+                                spacing: 10px;
+                                if PlayerState.now-kind != "": Rectangle { width: 18px; Icon { name: PlayerState.now-kind; tint: PlayerState.now-color; size: 16px; } }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text { text: PlayerState.now-label; color: Palette.text; font-size: Palette.fs; overflow: elide; }
+                                    if PlayerState.now-detail != "": Text { text: PlayerState.now-detail; color: Palette.faint; font-size: Palette.fs - 1px; overflow: elide; }
+                                }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Btn { text: "‹ Previous"; enabled: PlayerState.moment-count > 0; horizontal-stretch: 1; clicked => { PlayerState.step-moment(-1); keys.focus(); } }
+                            Btn { text: "Next ›"; enabled: PlayerState.moment-count > 0; horizontal-stretch: 1; clicked => { PlayerState.step-moment(1); keys.focus(); } }
+                        }
+                        Text { text: "Shift + ← / → also jump between moments"; color: Palette.faint; font-size: Palette.fs - 1.5px; wrap: word-wrap; }
+
+                        Rectangle { height: 1px; background: Palette.line; }
+                        SideHead { text: "DETAILS"; }
+                        for d in PlayerState.details: HorizontalLayout {
+                            spacing: 10px;
+                            Text { width: 78px; text: d.k; color: Palette.faint; font-size: Palette.fs - 1px; }
+                            Text { text: d.v; color: Palette.text; font-size: Palette.fs - 1px; overflow: elide; horizontal-stretch: 1; }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

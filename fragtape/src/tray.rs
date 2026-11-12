@@ -1,4 +1,4 @@
-//! Notification-area icon, its menu, and the global highlight hotkey (plain Win32).
+//! Notification-area icon, its menu, and the global hotkeys (highlight, screen recording) (plain Win32).
 
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -23,12 +23,14 @@ struct TrayState {
     send: Box<dyn Fn(Cmd) + Send + Sync>,
     menu: MenuFn,
     icon: Mutex<(String, String)>, // (color name, tooltip)
-    hotkey: Mutex<(Option<(u32, u32)>, Option<(u32, u32)>)>, // (wanted, registered)
+    /// [highlight, screen recording]: (wanted, registered)
+    hotkeys: Mutex<[(Option<(u32, u32)>, Option<(u32, u32)>); 2]>,
     notify: Mutex<Option<(String, String)>>,
 }
 
 static STATE: OnceLock<TrayState> = OnceLock::new();
 static HWND_: AtomicIsize = AtomicIsize::new(0);
+static STOP: OnceLock<Option<fn()>> = OnceLock::new();
 
 // ---- icons --------------------------------------------------------------------------------
 fn color(name: &str) -> (u8, u8, u8) {
@@ -82,6 +84,12 @@ pub fn ico_file() -> Vec<u8> {
     ico
 }
 
+/// The app icon (the bomb on its dark tile) as a window icon handle.
+pub fn app_hicon(size: u32) -> HICON {
+    let bmp = bmp(&crate::logo::rgba(size, (242, 242, 242), (255, 138, 28), Some((22, 24, 28))), size);
+    unsafe { CreateIconFromResourceEx(bmp.as_ptr(), bmp.len() as u32, 1, 0x0003_0000, size as i32, size as i32, LR_DEFAULTCOLOR) }
+}
+
 fn make_icon(name: &str) -> HICON {
     let bmp = icon_bitmap(color(name), 32);
     unsafe { CreateIconFromResourceEx(bmp.as_ptr(), bmp.len() as u32, 1, 0x0003_0000, 32, 32, LR_DEFAULTCOLOR) }
@@ -117,19 +125,22 @@ fn apply_icon(hwnd: HWND, msg: u32) {
 
 fn sync_hotkey(hwnd: HWND) {
     let st = STATE.get().unwrap();
-    let mut hk = st.hotkey.lock().unwrap();
-    if hk.0 == hk.1 {
-        return;
+    let mut all = st.hotkeys.lock().unwrap();
+    // unregister changed ones first, so two hotkeys can swap keys
+    for (i, hk) in all.iter_mut().enumerate() {
+        if hk.0 != hk.1 && hk.1.take().is_some() {
+            unsafe { UnregisterHotKey(hwnd, HOTKEY_ID + i as i32) };
+        }
     }
-    unsafe {
-        if hk.1.take().is_some() {
-            UnregisterHotKey(hwnd, HOTKEY_ID);
+    for (i, hk) in all.iter_mut().enumerate() {
+        if hk.0 == hk.1 {
+            continue;
         }
         if let Some((mods, vk)) = hk.0 {
-            if RegisterHotKey(hwnd, HOTKEY_ID, mods | MOD_NOREPEAT, vk) != 0 {
+            if unsafe { RegisterHotKey(hwnd, HOTKEY_ID + i as i32, mods | MOD_NOREPEAT, vk) } != 0 {
                 hk.1 = Some((mods, vk));
             } else {
-                crate::logf!("[tray] the highlight hotkey is already used by another app");
+                crate::logf!("[tray] the {} hotkey is already used by another app", ["highlight", "screen recording"][i]);
                 hk.0 = None;
             }
         }
@@ -182,6 +193,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             (st.send)(Cmd::Mark);
             0
         }
+        WM_HOTKEY if wp as i32 == HOTKEY_ID + 1 => {
+            (st.send)(Cmd::ScreenRec);
+            0
+        }
         WM_REFRESH => {
             apply_icon(hwnd, NIM_MODIFY);
             sync_hotkey(hwnd);
@@ -200,7 +215,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         }
         WM_DESTROY => {
             Shell_NotifyIconW(NIM_DELETE, &nid(hwnd));
-            PostQuitMessage(0);
+            match STOP.get().copied().flatten() {
+                Some(stop) => stop(),
+                None => PostQuitMessage(0),
+            }
             0
         }
         m if m == taskbar => {
@@ -230,9 +248,10 @@ pub fn set_state(icon: &str, tip: &str) {
     }
 }
 
-pub fn set_hotkey(spec: &str) {
+/// `which`: 0 = highlight, 1 = screen recording.
+pub fn set_hotkey(which: usize, spec: &str) {
     if let Some(st) = STATE.get() {
-        st.hotkey.lock().unwrap().0 = parse_hotkey(spec);
+        st.hotkeys.lock().unwrap()[which].0 = parse_hotkey(spec);
         post(WM_REFRESH);
     }
 }
@@ -242,9 +261,12 @@ pub fn quit() {
 }
 
 /// Create the icon and run the message loop on this thread until Quit.
-pub fn run(send: Box<dyn Fn(Cmd) + Send + Sync>, menu: MenuFn, hotkey: &str) {
+/// `pump`: run this thread's message loop instead of the plain one (the native window's);
+/// `stop`: how to end that loop when the tray closes.
+pub fn run(send: Box<dyn Fn(Cmd) + Send + Sync>, menu: MenuFn, hotkeys: [&str; 2], pump: Option<fn()>, stop: Option<fn()>) {
+    let _ = STOP.set(stop);
     let _ = STATE.set(TrayState { send, menu, icon: Mutex::new(("watching".into(), "Fragtape".into())),
-                                  hotkey: Mutex::new((parse_hotkey(hotkey), None)), notify: Mutex::new(None) });
+                                  hotkeys: Mutex::new(hotkeys.map(|h| (parse_hotkey(h), None))), notify: Mutex::new(None) });
     unsafe {
         let hinst = GetModuleHandleW(std::ptr::null());
         let class = wide("FragtapeTray");
@@ -259,10 +281,15 @@ pub fn run(send: Box<dyn Fn(Cmd) + Send + Sync>, menu: MenuFn, hotkey: &str) {
         HWND_.store(hwnd as isize, Ordering::Relaxed);
         apply_icon(hwnd, NIM_ADD);
         sync_hotkey(hwnd);
-        let mut msg: MSG = std::mem::zeroed();
-        while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+        match pump {
+            Some(run) => run(),
+            None => {
+                let mut msg: MSG = std::mem::zeroed();
+                while GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+            }
         }
         HWND_.store(0, Ordering::Relaxed);
     }

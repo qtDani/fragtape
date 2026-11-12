@@ -19,12 +19,16 @@ use crate::util::{self, data_dir, local_dir, mono, videos_root};
 use crate::{importers, logf, providers, server, tray, win};
 
 pub const PORT: u16 = 3133;
+/// Where screen recordings go (a group of their own in the library).
+pub const SCREEN_GAME: &str = "Screen recordings";
 const IDLE_STOP_AFTER: f64 = 15.0; // seconds without a game/recording before the hidden OBS closes
 
 #[derive(Clone, Debug)]
 pub enum Cmd {
     Answer(String, Option<String>),
     Mark,
+    /// Start or stop recording the whole screen.
+    ScreenRec,
     PrefChanged(String),
     Stop,
     Show,
@@ -66,8 +70,14 @@ pub fn build_options(s: &Shared, t: &Target) -> Options {
     let available = s.engine.encoders.lock().unwrap().clone();
     let encoder = quality::pick_encoder(&p, s.vendor, available.as_deref());
     let ten_bit = custom && p["adv_color"] == "p010" && !encoder.contains("h264") && encoder != "obs_x264";
-    let base = win::monitor_size(&t.pids);
-    let game = if t.game.is_empty() { "Other".to_string() } else { t.game.clone() };
+    let base = win::monitor_size(if t.screen { &[] } else { &t.pids });
+    let game = if t.screen { SCREEN_GAME.to_string() } else if t.game.is_empty() { "Other".to_string() } else { t.game.clone() };
+    // a screen recording: the whole monitor and the whole PC sound (plus the mic unless it's off)
+    let (capture, audio) = if t.screen {
+        ("screen".to_string(), if st("audio") == "game" { "screen" } else { "screen_mic" }.to_string())
+    } else {
+        (st("capture"), st("audio"))
+    };
     Options {
         rec_dir: videos_root().join(util::safe_name(&game)),
         encoder_settings: quality::encoder_settings(&encoder, &p, ten_bit),
@@ -77,9 +87,11 @@ pub fn build_options(s: &Shared, t: &Target) -> Options {
         out: quality::output_size(base, int("adv_resolution")),
         scale_filter: st("adv_scale_filter"),
         color: if ten_bit { "P010".into() } else { "NV12".into() },
-        capture: st("capture"),
-        audio: st("audio"),
+        capture,
+        monitor_id: win::monitor_device_id(if t.screen { &[] } else { &t.pids }).unwrap_or_default(),
+        audio,
         mic_mono: p["mic_mono"] == true,
+        mic_boost: int("mic_boost"),
         replay_seconds: int("clip_length"),
         replay_mb: int("adv_replay_mb"),
         window_spec: t.spec.clone().unwrap_or_default(),
@@ -254,7 +266,15 @@ fn edge_path() -> Option<PathBuf> {
         .map(|b| PathBuf::from(b).join(r"Microsoft\Edge\Application\msedge.exe")).find(|p| p.exists())
 }
 
-pub fn open_window(s: &Shared) {
+pub fn open_window(s: &Arc<Shared>) {
+    if crate::ui::enabled() {
+        return crate::ui::show(s.clone());
+    }
+    open_web_window(s);
+}
+
+/// The old window: the HTML page in an Edge app window (used with FRAGTAPE_WEB_UI=1).
+pub fn open_web_window(s: &Shared) {
     if let Some(h) = win::find_browser_window("Fragtape") {
         return win::bring_to_front(h);
     }
@@ -362,6 +382,9 @@ pub fn run(show_window: bool) {
     }
 
     crate::toast::set_look(&library.prefs());
+    if crate::ui::enabled() {
+        crate::ui::init();
+    }
     server::start(shared.clone());
     let gsi = Arc::new(providers::Gsi::default());
     let s2 = shared.clone();
@@ -391,10 +414,22 @@ pub fn run(show_window: bool) {
                             std::thread::spawn(move || crate::toast::info("HIGHLIGHT", &g.name, text, &g.name, game_icon(&pids), pids));
                         }
                     }
+                    Cmd::ScreenRec => {
+                        let what = c.toggle_screen();
+                        let (title, text) = match what {
+                            "started" => ("SCREEN RECORDING", "Recording your screen. Press the button or hotkey again to stop."),
+                            "stopped" => ("SCREEN RECORDING", "Saved to Screen recordings."),
+                            "busy" => ("ALREADY RECORDING", "Fragtape is recording your game right now."),
+                            _ => ("CAN'T RECORD", "The screen recording didn't start. Is OBS Studio installed?"),
+                        };
+                        // the cards are hidden from captures, so they never end up in the recording
+                        std::thread::spawn(move || crate::toast::info(title, SCREEN_GAME, text, SCREEN_GAME, None, vec![]));
+                    }
                     Cmd::PrefChanged(k) => {
                         let p = s.library.prefs();
                         match k.as_str() {
-                            "hotkey" => tray::set_hotkey(p["hotkey"].as_str().unwrap_or("off")),
+                            "hotkey" => tray::set_hotkey(0, p["hotkey"].as_str().unwrap_or("off")),
+                            "rec_hotkey" => tray::set_hotkey(1, p["rec_hotkey"].as_str().unwrap_or("off")),
                             "theme" | "accent" | "card_corner" | "card_time" | "animations" => crate::toast::set_look(&p),
                             "text_size" | "thumb_size" => {}
                             "autostart" => {
@@ -461,7 +496,9 @@ pub fn run(show_window: bool) {
             let st = c.status();
             *s.active_path.lock().unwrap() = c.obs.active_path.clone();
             let game = st["game"].as_str().unwrap_or("").to_string();
-            if c.obs.recording() {
+            if c.screen_rec {
+                tray::set_state("rec", "Fragtape: recording the screen");
+            } else if c.obs.recording() {
                 tray::set_state("rec", &format!("Fragtape: recording {game}"));
             } else if c.obs.replay() {
                 tray::set_state("clip", &format!("Fragtape: saving highlights of {game}"));
@@ -521,14 +558,25 @@ pub fn run(show_window: bool) {
             items.push((format!("{what}: {g}"), None));
             items.push((format!("Save highlight ({hotkey})"), Some(Cmd::Mark)));
         }
-        if st["recording"] == true {
+        let rec_key = match s.library.prefs()["rec_hotkey"].as_str().unwrap_or("off") { "off" => String::new(), k => format!(" ({k})") };
+        if st["screen"] == true {
+            items.push((format!("Stop screen recording{rec_key}"), Some(Cmd::ScreenRec)));
+        } else if st["recording"] == true {
             items.push(("Stop recording".into(), Some(Cmd::Stop)));
+        } else {
+            items.push((format!("Record screen{rec_key}"), Some(Cmd::ScreenRec)));
         }
         items
     });
     let s = shared.clone();
-    let hotkey = library.prefs()["hotkey"].as_str().unwrap_or("off").to_string();
-    tray::run(Box::new(move |c| s.send(c)), menu, &hotkey);
+    let p = library.prefs();
+    let hotkeys = [p["hotkey"].as_str().unwrap_or("off"), p["rec_hotkey"].as_str().unwrap_or("off")];
+    if crate::ui::enabled() {
+        // the window system runs this thread's messages (the tray's too) until quit
+        tray::run(Box::new(move |c| s.send(c)), menu, hotkeys, Some(crate::ui::run_loop), Some(crate::ui::quit));
+    } else {
+        tray::run(Box::new(move |c| s.send(c)), menu, hotkeys, None, None);
+    }
     // tray closed: make sure the loop finishes the recording and closes OBS
     shared.send(Cmd::Quit);
     let _ = loop_thread.join();

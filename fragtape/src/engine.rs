@@ -40,8 +40,12 @@ pub struct Options {
     pub scale_filter: String,
     pub color: String, // "NV12" / "P010"
     pub capture: String,
+    /// The monitor for the whole-screen capture (OBS's `monitor_id`).
+    pub monitor_id: String,
     pub audio: String,
     pub mic_mono: bool,
+    /// Extra microphone gain in dB (a limiter after it stops clipping).
+    pub mic_boost: i64,
     pub replay_seconds: i64,
     pub replay_mb: i64,
     pub window_spec: String,
@@ -82,9 +86,17 @@ pub fn find_obs() -> Option<PathBuf> {
     c.into_iter().find(|p| obs_root(p).is_ok())
 }
 
-/// Which sources are muted for each audio choice.
+/// Which sources are muted for each audio choice. "screen" / "screen_mic" are for screen
+/// recordings (no game window to take the sound from: the whole PC sound instead).
 pub fn audio_mutes(audio: &str) -> [(&'static str, bool); 3] {
-    [(DESKTOP, audio != "all"), (MIC, audio == "game"), (GAME_AUDIO, audio == "all")]
+    let screen = audio.starts_with("screen");
+    [(DESKTOP, audio != "all" && !screen), (MIC, audio == "game" || audio == "screen"), (GAME_AUDIO, audio == "all" || screen)]
+}
+
+/// Scene items: 1 = window capture, 2 = game capture, 3 = the whole screen.
+pub fn capture_items(capture: &str) -> [(i64, bool); 3] {
+    let screen = capture == "screen";
+    [(1, !screen), (2, !screen), (3, screen)]
 }
 
 fn ini(sections: &[(&str, Vec<(&str, String)>)]) -> String {
@@ -130,10 +142,18 @@ pub fn scene_collection(o: &Options) -> Value {
     let game = source(GAME, "game_capture", json!({"capture_mode": "window", "window": spec, "priority": 2,
                                                    "capture_cursor": false, "allow_transparency": false,
                                                    "anti_cheat_hook": true, "capture_audio": false}), false, 0, 0);
-    let screen = source(SCREEN, "monitor_capture", json!({"monitor": 0, "capture_cursor": true}), false, 0, 0);
+    let screen = source(SCREEN, "monitor_capture", json!({"monitor_id": o.monitor_id, "capture_cursor": true}), false, 0, 0);
     let audio = source(GAME_AUDIO, "wasapi_process_output_capture", json!({"window": spec, "priority": 2}),
                        muted(GAME_AUDIO), 0, game_mix);
     let screen_mode = o.capture == "screen";
+    let mut mic = source(MIC, "wasapi_input_capture", json!({"device_id": "default"}), muted(MIC),
+                         if o.mic_mono { FORCE_MONO } else { 0 }, mic_mix);
+    if o.mic_boost > 0 {
+        mic["filters"] = json!([
+            source("Fragtape mic boost", "gain_filter", json!({"db": o.mic_boost as f64}), false, 0, 0),
+            source("Fragtape mic limiter", "limiter_filter", json!({"threshold": -1.0, "release_time": 60}), false, 0, 0),
+        ]);
+    }
     // First item = bottom layer: Game Capture covers the window capture once it hooks the game.
     let scene = source(SCENE, "scene", json!({"id_counter": 4, "custom_size": false, "items": [
         item(&window, 1, o.base, !screen_mode), item(&game, 2, o.base, !screen_mode),
@@ -141,8 +161,7 @@ pub fn scene_collection(o: &Options) -> Value {
     json!({
         "name": PROFILE,
         "DesktopAudioDevice1": source(DESKTOP, "wasapi_output_capture", json!({"device_id": "default"}), muted(DESKTOP), 0, desk_mix),
-        "AuxAudioDevice1": source(MIC, "wasapi_input_capture", json!({"device_id": "default"}), muted(MIC),
-                                  if o.mic_mono { FORCE_MONO } else { 0 }, mic_mix),
+        "AuxAudioDevice1": mic,
         "sources": [scene, window, game, screen, audio],
         "groups": [], "scene_order": [{"name": SCENE}], "current_scene": SCENE, "current_program_scene": SCENE,
         "current_transition": "Cut", "transition_duration": 0, "transitions": [], "quick_transitions": [],
@@ -397,6 +416,8 @@ pub struct Target {
     pub spec: Option<String>,
     pub game: String,
     pub pids: Vec<u32>,
+    /// A screen recording started by the user (the whole monitor, not a game).
+    pub screen: bool,
 }
 
 /// What the controller needs from OBS (implemented by the engine, faked in tests).
@@ -449,6 +470,9 @@ impl EngineObs {
             }
             ("RecordStateChanged", "OBS_WEBSOCKET_OUTPUT_STOPPED") => {
                 self.recording = false;
+                if std::mem::take(&mut self.target.screen) && self.engine.running() {
+                    let _ = self.ensure(); // back to the game's capture (the replay buffer may still run)
+                }
                 self.active_path = None;
                 self.idle_since = mono();
                 if path.is_some() {
@@ -469,6 +493,7 @@ impl EngineObs {
             ("EngineClosed", _) => {
                 let was = self.recording;
                 (self.recording, self.replay, self.active_path) = (false, false, None);
+                self.target.screen = false;
                 self.idle_since = mono();
                 if was {
                     logf!("[engine] OBS closed while recording");
@@ -490,6 +515,10 @@ impl EngineObs {
             for (name, muted) in audio_mutes(&o.audio) {
                 let _ = self.engine.request("SetInputMute", Some(json!({"inputName": name, "inputMuted": muted})), 5);
             }
+            let _ = self.engine.request("SetInputSettings", Some(json!({"inputName": SCREEN, "inputSettings": {"monitor_id": o.monitor_id}})), 5);
+            for (id, on) in capture_items(&o.capture) {
+                let _ = self.engine.request("SetSceneItemEnabled", Some(json!({"sceneName": SCENE, "sceneItemId": id, "sceneItemEnabled": on})), 5);
+            }
             Ok(())
         } else {
             self.engine.start(&o)
@@ -502,7 +531,11 @@ impl Obs for EngineObs {
     fn replay(&self) -> bool { self.replay }
 
     fn start_recording(&mut self, target: Target) {
-        self.target = target;
+        if target.screen {
+            self.target.screen = true; // keep the game's window for when it ends
+        } else {
+            self.target = target;
+        }
         match self.ensure().and_then(|_| self.engine.request("StartRecord", None, 10)) {
             Ok(_) => self.recording = true,
             Err(e) => logf!("[engine] could not start recording: {e}"),
@@ -521,7 +554,8 @@ impl Obs for EngineObs {
     }
 
     fn start_replay(&mut self, target: Target) {
-        self.target = target;
+        let screen = self.recording && self.target.screen;
+        self.target = Target { screen, ..target };
         match self.ensure().and_then(|_| self.engine.request("StartReplayBuffer", None, 10)) {
             Ok(_) => self.replay = true,
             Err(e) => logf!("[engine] could not start the replay buffer: {e}"),
@@ -542,7 +576,7 @@ impl Obs for EngineObs {
 
     fn update_window(&mut self, spec: &str) {
         self.target.spec = Some(spec.to_string());
-        if !self.engine.running() {
+        if !self.engine.running() || self.target.screen {
             return;
         }
         for name in [GAME, WINDOW, GAME_AUDIO] {
@@ -561,10 +595,19 @@ mod tests {
         Options {
             rec_dir: PathBuf::from(r"C:\Videos\Fragtape\Game"), encoder: "obs_nvenc_h264_tex".into(),
             encoder_settings: json!({"rate_control": "CQP"}), fps: 144, base: (2560, 1440), out: (1920, 1080),
-            scale_filter: "lanczos".into(), color: "NV12".into(), capture: "game".into(), audio: "game_mic".into(),
-            mic_mono: true, replay_seconds: 30, replay_mb: 2048, window_spec: "T:C:game.exe".into(), audio_bitrate: 192,
+            scale_filter: "lanczos".into(), color: "NV12".into(), capture: "game".into(), monitor_id: "DISPLAY1".into(), audio: "game_mic".into(),
+            mic_mono: true, mic_boost: 12, replay_seconds: 30, replay_mb: 2048, window_spec: "T:C:game.exe".into(), audio_bitrate: 192,
             sample_rate: 48000, separate_tracks: true, format: "hybrid_mp4".into(), priority: "above_normal".into(),
         }
+    }
+
+    #[test]
+    fn screen_recordings_take_the_whole_pc_sound() {
+        let m = |a: &str| audio_mutes(a).map(|(_, muted)| muted); // desktop, mic, game audio
+        assert_eq!(m("screen_mic"), [false, false, true]);
+        assert_eq!(m("screen"), [false, true, true]);
+        assert_eq!(m("game"), [true, true, false]);
+        assert_eq!(capture_items("screen"), [(1, false), (2, false), (3, true)]);
     }
 
     #[test]
@@ -585,6 +628,9 @@ mod tests {
         assert_eq!(scene["AuxAudioDevice1"]["flags"], FORCE_MONO);
         assert_eq!((scene["AuxAudioDevice1"]["muted"].clone(), scene["DesktopAudioDevice1"]["muted"].clone()), (json!(false), json!(true)));
         assert_eq!(scene["AuxAudioDevice1"]["mixers"], 5); // track 1 + mic track
+        assert_eq!(scene["AuxAudioDevice1"]["filters"][0]["id"], "gain_filter");
+        assert_eq!(scene["AuxAudioDevice1"]["filters"][0]["settings"]["db"], 12.0);
+        assert_eq!(scene["AuxAudioDevice1"]["filters"][1]["id"], "limiter_filter");
         let items: Vec<&str> = scene["sources"][0]["settings"]["items"].as_array().unwrap().iter().map(|i| i["name"].as_str().unwrap()).collect();
         assert_eq!(items, vec![WINDOW, GAME, SCREEN, GAME_AUDIO]);
         assert_eq!(scene["sources"][0]["settings"]["items"][0]["bounds"]["x"], 2560.0);

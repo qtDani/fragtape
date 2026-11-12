@@ -1,0 +1,127 @@
+import { ScrollView } from "std-widgets.slint";
+import { Palette } from "theme.slint";
+import { Btn, Seg, Chips, Field, Opt, Box, GameIcon } from "widgets.slint";
+import { Icon } from "icons.slint";
+
+export struct GameRow { name: string, letter: string, icon: image, meta: string, mode: string, kills: bool, playing: bool }
+export struct Found { id: string, name: string, letter: string, icon: image, kills: bool, added: bool, exe: string }
+
+export global GamesState {
+    in property <[GameRow]> games;
+    in property <string> default-mode;
+    in property <string> db-text;
+    in property <bool> scanning;
+    in property <bool> db-ready;
+    in property <int> total;
+    in property <[Found]> results;
+    in property <string> results-note;
+    in-out property <string> query;
+    in-out property <string> filter;
+    in-out property <string> view: "all";
+    out property <[Opt]> modes: [{ value: "ask", label: "Ask" }, { value: "full", label: "Record" }, { value: "highlights", label: "Clips" }, { value: "off", label: "Off" }];
+    callback search(string);
+    callback add(string, string);        // id, exe
+    callback set-mode(string, string);   // game, mode
+    callback set-default(string);
+    callback remove(string);
+    callback scan();
+    callback refilter();
+}
+
+export component GamesPage inherits ScrollView {
+    VerticalLayout {
+        spacing: 14px;
+        padding-right: 6px;
+        alignment: start;
+        Text { text: "Games"; color: Palette.text; font-size: Palette.fs + 11px; font-weight: Palette.gloss ? 300 : 400; }
+        Box {
+            title: "New games";
+            hint: "what to do the first time a game is played";
+            HorizontalLayout {
+                alignment: start;
+                Seg { options: GamesState.modes; current: GamesState.default-mode; modes: true; picked(v) => { GamesState.set-default(v); } }
+            }
+        }
+        Box {
+            title: "Add a game";
+            hint: GamesState.db-text;
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                Field {
+                    w: 420px;
+                    placeholder: "Search ~10,000 games, or type an .exe name";
+                    text <=> GamesState.query;
+                    edited(t) => { GamesState.search(t); }
+                }
+            }
+            if GamesState.results-note != "": Text { text: GamesState.results-note; color: Palette.muted; font-size: Palette.fs - 1px; }
+            for r in GamesState.results: HorizontalLayout {
+                spacing: 10px;
+                height: 34px;
+                GameIcon { img: r.icon; letter: r.letter; size: 28px; y: 3px; }
+                Text { text: r.name; color: Palette.text; font-size: Palette.fs; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                if r.kills: Rectangle {
+                    width: 46px; height: 18px; y: 8px;
+                    border-radius: Palette.r-sm; background: #22c55e30;
+                    Text { text: "KILLS"; color: #86efac; font-size: 10px; font-weight: 700; }
+                }
+                if r.added: Text { text: "added"; color: Palette.faint; font-size: Palette.fs - 1px; vertical-alignment: center; }
+                if !r.added: Btn { text: "Add"; clicked => { GamesState.add(r.id, r.exe); } }
+            }
+        }
+        Box {
+            title: "Your games";
+            hint: GamesState.total > 0 ? GamesState.total : "";
+            HorizontalLayout {
+                spacing: 10px;
+                Field { w: 220px; placeholder: "Filter…"; text <=> GamesState.filter; edited => { GamesState.refilter(); } }
+                Chips {
+                    options: [{ value: "all", label: "All" }, { value: "installed", label: "Installed" }];
+                    current: GamesState.view;
+                    picked(v) => { GamesState.view = v; GamesState.refilter(); }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Btn { text: GamesState.scanning ? "Scanning…" : "Scan PC"; enabled: !GamesState.scanning && GamesState.db-ready; clicked => { GamesState.scan(); } }
+            }
+            if GamesState.games.length == 0: Text { text: GamesState.total > 0 ? "No match" : "Games you play show up here automatically."; color: Palette.muted; font-size: Palette.fs; }
+            for g in GamesState.games: Rectangle {
+                height: 60px;
+                border-radius: Palette.r-lg;
+                background: Palette.card;
+                border-width: g.playing ? 1px : 0;
+                border-color: Palette.ok;
+                HorizontalLayout {
+                    padding: 10px;
+                    spacing: 12px;
+                    GameIcon { img: g.icon; letter: g.letter; size: 40px; }
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 1;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: start;
+                            Text { text: g.name; color: Palette.text; font-size: Palette.fs + 0.5px; font-weight: 600; overflow: elide; }
+                            if g.kills: Rectangle {
+                                width: 46px; height: 17px;
+                                border-radius: Palette.r-sm; background: #22c55e30;
+                                Text { text: "KILLS"; color: #86efac; font-size: 10px; font-weight: 700; }
+                            }
+                        }
+                        Text { text: g.meta; color: Palette.muted; font-size: Palette.fs - 1.5px; overflow: elide; }
+                    }
+                    Rectangle {
+                        width: 26px;
+                        x-ta := TouchArea { mouse-cursor: pointer; clicked => { GamesState.remove(g.name); } }
+                        Text { text: "×"; color: x-ta.has-hover ? Palette.text : Palette.faint; font-size: 18px; }
+                    }
+                    Seg { y: 4px; options: GamesState.modes; current: g.mode; modes: true; picked(v) => { GamesState.set-mode(g.name, v); } }
+                }
+            }
+            Text {
+                text: "Ask = ask me next time · Record = whole session, kills become markers · Clips = only save highlights (kills and your hotkey) · Off = ignore";
+                color: Palette.faint; font-size: Palette.fs - 1.5px; wrap: word-wrap;
+            }
+        }
+    }
+}

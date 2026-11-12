@@ -542,6 +542,7 @@ fn show(spec: Spec) -> Arc<AtomicIsize> {
         let round: u32 = if look().theme == "vista" { 2 } else { 1 }; // DWMWCP_ROUND / DONOTROUND
         DwmSetWindowAttribute(hwnd, 33, &round as *const u32 as *const _, 4);
         SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+        SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE); // never in a screen recording
         stack().lock().unwrap().push((hwnd as isize, h));
         h2.store(hwnd as isize, Ordering::Relaxed);
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);

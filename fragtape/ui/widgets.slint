@@ -1,0 +1,258 @@
+import { Palette } from "theme.slint";
+
+export struct Opt {
+    value: string,
+    label: string,
+    disabled: bool,
+}
+
+// A button: normal, primary (accent), danger, or flat (no frame).
+export component Btn inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary;
+    in property <bool> danger;
+    in property <bool> flat;
+    in property <bool> enabled: true;
+    in property <string> tip;
+    in property <length> pad: 12px;
+    callback clicked;
+    min-height: 30px;
+    min-width: lbl.preferred-width + 2 * pad;
+    horizontal-stretch: 0;
+    border-radius: Palette.r-lg;
+    border-width: flat ? 0 : 1px;
+    border-color: primary ? Palette.accent : danger ? #7f1d1d : (ta.has-hover && enabled ? Palette.hover-line : Palette.line);
+    background: !enabled ? Palette.card
+        : primary ? (Palette.gloss ? Palette.gloss-blue : (ta.has-hover ? Palette.accent.brighter(15%) : Palette.accent))
+        : danger ? (ta.has-hover ? #7f1d1d : #3b1212)
+        : flat ? (ta.has-hover ? Palette.card-hi : transparent)
+        : Palette.gloss ? Palette.gloss-btn
+        : ta.has-hover ? Palette.card-hi : Palette.card;
+    opacity: enabled ? 1 : 0.5;
+    animate background { duration: Palette.anim; }
+    lbl := Text {
+        text: root.text;
+        color: primary ? Palette.on-accent : danger ? #fecaca : Palette.text;
+        font-size: Palette.fs;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    ta := TouchArea {
+        mouse-cursor: enabled ? pointer : default;
+        clicked => { if (enabled) { root.clicked(); } }
+    }
+}
+
+// A segmented choice (one of several).
+export component Seg inherits Rectangle {
+    in property <[Opt]> options;
+    in property <string> current;
+    // colour the chosen game mode like the HTML version
+    in property <bool> modes;
+    callback picked(string);
+    horizontal-stretch: 0;
+    height: 32px;
+    border-radius: Palette.r-lg;
+    border-width: 1px;
+    border-color: Palette.line;
+    background: Palette.bg;
+    HorizontalLayout {
+        padding: 2px;
+        spacing: 2px;
+        for o in options: Rectangle {
+            property <bool> on: o.value == current;
+            min-width: t.preferred-width + 22px;
+            border-radius: Palette.r-sm;
+            background: on ? (modes && o.value == "full" ? #ef444438 : modes && o.value == "highlights" ? #f59e0b38
+                    : Palette.gloss ? Palette.gloss-blue : Palette.accent)
+                : (a.has-hover && !o.disabled ? Palette.card : transparent);
+            animate background { duration: Palette.anim; }
+            t := Text {
+                text: o.label;
+                font-size: Palette.fs - 0.5px;
+                color: o.disabled ? Palette.faint
+                    : on ? (modes && o.value == "full" ? #fecaca : modes && o.value == "highlights" ? #fde68a : Palette.on-accent)
+                    : (a.has-hover ? Palette.text : Palette.muted);
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            a := TouchArea {
+                mouse-cursor: o.disabled ? default : pointer;
+                clicked => { if (!o.disabled && !on) { root.picked(o.value); } }
+            }
+        }
+    }
+}
+
+// Filter chips (All / Highlights / ...): like Seg but lighter.
+export component Chips inherits Rectangle {
+    in property <[Opt]> options;
+    in property <string> current;
+    callback picked(string);
+    horizontal-stretch: 0;
+    height: 32px;
+    border-radius: Palette.r-lg;
+    border-width: 1px;
+    border-color: Palette.line;
+    HorizontalLayout {
+        padding: 2px;
+        spacing: 2px;
+        for o in options: Rectangle {
+            property <bool> on: o.value == current;
+            min-width: t.preferred-width + 24px;
+            border-radius: Palette.r-sm;
+            background: on ? Palette.card-hi : (a.has-hover ? Palette.card : transparent);
+            t := Text {
+                text: o.label;
+                font-size: Palette.fs - 0.5px;
+                color: on ? Palette.text : Palette.muted;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            a := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.picked(o.value); }
+            }
+        }
+    }
+}
+
+// A one-line text field.
+export component Field inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <length> w: 220px;
+    callback edited(string);
+    callback accepted(string);
+    width: w;
+    height: 32px;
+    border-radius: Palette.r-lg;
+    border-width: 1px;
+    border-color: ti.has-focus ? Palette.accent : Palette.line;
+    background: Palette.bg;
+    ph := Text {
+        x: 10px;
+        text: root.placeholder;
+        visible: ti.text == "";
+        color: Palette.faint;
+        font-size: Palette.fs;
+        vertical-alignment: center;
+    }
+    ti := TextInput {
+        x: 10px;
+        width: parent.width - 20px;
+        text <=> root.text;
+        color: Palette.text;
+        font-size: Palette.fs;
+        vertical-alignment: center;
+        single-line: true;
+        selection-background-color: Palette.accent.with-alpha(0.4);
+        edited => { root.edited(self.text); }
+        accepted => { root.accepted(self.text); }
+    }
+}
+
+// A slider with the accent fill on the left and the theme's track on the right.
+export component Slide inherits Rectangle {
+    in property <float> minimum: 0;
+    in property <float> maximum: 1;
+    in-out property <float> value;
+    in property <length> w: 220px;
+    callback moved(float);     // while dragging
+    callback released(float);  // when let go
+    width: w;
+    height: 18px;
+    property <float> k: (value - minimum) / max(0.0001, maximum - minimum);
+    Rectangle {
+        y: (parent.height - 6px) / 2;
+        height: 6px;
+        border-radius: Palette.r-sm;
+        background: Palette.track;
+        Rectangle {
+            x: 0;
+            width: parent.width * k;
+            border-radius: Palette.r-sm;
+            background: Palette.accent;
+        }
+    }
+    Rectangle {
+        x: (parent.width - 14px) * k;
+        y: (parent.height - 14px) / 2;
+        width: 14px;
+        height: 14px;
+        border-radius: Palette.r-sm;
+        background: Palette.accent;
+        border-width: 2px;
+        border-color: Palette.panel;
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        function at(x: length) -> float {
+            return root.minimum + max(0, min(1, x / root.width)) * (root.maximum - root.minimum);
+        }
+        pointer-event(e) => {
+            if (e.kind == PointerEventKind.down) { root.value = at(self.mouse-x); root.moved(root.value); }
+            if (e.kind == PointerEventKind.up) { root.released(root.value); }
+        }
+        moved => { if (self.pressed) { root.value = at(self.mouse-x); root.moved(root.value); } }
+    }
+}
+
+// A section with a small uppercase heading.
+export component Box inherits Rectangle {
+    in property <string> title;
+    in property <string> hint;
+    background: Palette.panel;
+    border-radius: Palette.r-lg;
+    border-width: 1px;
+    border-color: Palette.line;
+    VerticalLayout {
+        padding: 14px;
+        spacing: 10px;
+        if title != "": HorizontalLayout {
+            spacing: 8px;
+            alignment: start;
+            Text { text: root.title.to-uppercase(); font-size: Palette.fs - 1.5px; font-weight: 600; letter-spacing: 0.8px; color: Palette.muted; }
+            Text { text: root.hint; font-size: Palette.fs - 1.5px; color: Palette.faint; }
+        }
+        @children
+    }
+}
+
+// One settings row: label, the control, and a short explanation.
+export component PrefRow inherits Rectangle {
+    in property <string> label;
+    in property <string> why;
+    in property <bool> first;
+    min-height: 44px;
+    Rectangle { y: 0; height: first ? 0 : 1px; background: Palette.line; }
+    HorizontalLayout {
+        padding-top: 7px;
+        padding-bottom: 7px;
+        spacing: 14px;
+        Text { width: 170px; text: root.label; color: Palette.text; font-size: Palette.fs; vertical-alignment: center; wrap: word-wrap; }
+        HorizontalLayout { alignment: start; horizontal-stretch: 0; spacing: 8px; @children }
+        Text { text: root.why; color: Palette.muted; font-size: Palette.fs - 1px; vertical-alignment: center; wrap: word-wrap; horizontal-stretch: 1; }
+    }
+}
+
+// A small game icon with a letter fallback.
+export component GameIcon inherits Rectangle {
+    in property <image> img;
+    in property <string> letter;
+    in property <length> size: 40px;
+    width: size;
+    height: size;
+    border-radius: Palette.r-lg;
+    background: Palette.card-hi;
+    clip: true;
+    if img.width == 0: Text {
+        text: root.letter;
+        color: Palette.muted;
+        font-size: size * 0.45;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    if img.width > 0: Image { source: root.img; width: size; height: size; image-fit: cover; }
+}

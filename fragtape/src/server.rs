@@ -166,6 +166,11 @@ fn handle(s: &Shared, mut req: Request) {
     let _ = req.respond(resp);
 }
 
+/// Games from the game list matching `query` (for the native window).
+pub fn search_games(s: &Shared, query: &str) -> Vec<Value> {
+    search(s, query).as_array().cloned().unwrap_or_default()
+}
+
 fn search(s: &Shared, query: &str) -> Value {
     let have: std::collections::HashSet<String> = s.library.games().iter()
         .filter_map(|g| g["name"].as_str().map(|n| n.to_lowercase())).collect();
@@ -176,7 +181,7 @@ fn search(s: &Shared, query: &str) -> Value {
     })).collect())
 }
 
-fn post(s: &Shared, path: &str, b: &Value) -> Result<Value, String> {
+pub fn post(s: &Shared, path: &str, b: &Value) -> Result<Value, String> {
     let str_of = |k: &str| b[k].as_str().map(String::from).ok_or(format!("{k} required"));
     let lib = &s.library;
     match path {
@@ -252,6 +257,7 @@ fn post(s: &Shared, path: &str, b: &Value) -> Result<Value, String> {
         }
         "/api/install-gsi" => return Ok(json!({"ok": true, "results": crate::providers::install_gsi()})),
         "/api/mark" => s.send(Cmd::Mark),
+        "/api/screen" => s.send(Cmd::ScreenRec),
         "/api/stop" => s.send(Cmd::Stop),
         "/api/show" => s.send(Cmd::Show),
         _ => return Err("not found".into()),

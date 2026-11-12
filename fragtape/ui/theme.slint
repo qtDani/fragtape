@@ -1,0 +1,37 @@
+// Colours and sizes of the current theme. Rust fills these in (src/ui/theme.rs) from the
+// theme + accent settings; the defaults below are "Sharp minimal".
+export global Palette {
+    in-out property <color> bg: #0d0d0d;
+    in-out property <color> side-color: #0d0d0d;
+    in-out property <color> panel: #121212;
+    in-out property <color> card: #171717;
+    in-out property <color> card-hi: #222222;
+    in-out property <color> line: #2a2a2a;
+    in-out property <color> hover-line: #444444;
+    in-out property <color> text: #eaeaea;
+    in-out property <color> muted: #8a8a8a;
+    in-out property <color> faint: #666666;
+    in-out property <color> accent: #ef4444;
+    in-out property <color> on-accent: #ffffff;
+    in-out property <color> sel: #1a1a1a;          // selected nav item
+    in-out property <length> bar: 2px;             // the accent bar on the selected nav item
+    in-out property <color> track: #333333;
+    in-out property <color> rec: #ef4444;
+    in-out property <color> clip: #f59e0b;
+    in-out property <color> ok: #22c55e;
+    in-out property <length> r-sm: 2px;
+    in-out property <length> r-lg: 2px;
+    in-out property <bool> gloss: false;           // Vista: glossy two-tone buttons
+    in-out property <bool> blocks: false;          // Blocks: uppercase tabs, filled selection
+    in-out property <bool> light: false;
+    // text size and motion
+    in-out property <length> fs: 13px;
+    in-out property <duration> anim: 120ms;
+    in-out property <length> thumb: 250px;         // clip card width
+    // behind everything (Vista: a blue glow) and the sidebar
+    out property <brush> window-bg: gloss ? @radial-gradient(circle, #2f7fb8 0%, #0b2a4a 40%, #04101f 100%) : bg;
+    out property <brush> side: gloss ? @linear-gradient(180deg, #506e8c73 0%, #141e2d8c 100%) : side-color;
+    // glossy brushes (only used when gloss is on)
+    out property <brush> gloss-btn: @linear-gradient(180deg, #6b7480 0%, #454c55 50%, #30363d 51%, #4a525c 100%);
+    out property <brush> gloss-blue: @linear-gradient(180deg, #a9dcff 0%, #4aa3e6 50%, #1d77c9 51%, #5cb4f0 100%);
+}

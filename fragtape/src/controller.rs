@@ -84,6 +84,11 @@ pub struct Controller<O: Obs> {
     lol: Option<LeagueProvider>,
     pub start_providers: bool,
     window_found: bool,
+    /// A screen recording the user started is running (or starting).
+    pub screen_rec: bool,
+    screen_since: f64,
+    /// The game wanted a full recording while the screen was being recorded: start it after.
+    game_rec_waiting: bool,
 }
 
 pub fn exe_running(exe: &str, running: &Snapshot) -> bool {
@@ -102,6 +107,7 @@ impl<O: Obs> Controller<O> {
             current_pids: vec![], mode: None, game_gone_since: None, we_started_recording: false, we_started_replay: false,
             session: None, next_poll: 0.0, moment: None, replay_due: None, replay_titles: VecDeque::new(),
             asking: BTreeSet::new(), close_prompt: HashMap::new(), lol: None, start_providers: true, window_found: false,
+            screen_rec: false, screen_since: 0.0, game_rec_waiting: false,
         }
     }
 
@@ -137,6 +143,8 @@ impl<O: Obs> Controller<O> {
             "recording": self.obs.recording(),
             "replay": self.obs.replay(),
             "window_found": self.window_found,
+            "screen": self.screen_rec,
+            "screen_since": self.screen_since,
         })
     }
 
@@ -241,7 +249,7 @@ impl<O: Obs> Controller<O> {
             self.window_found = w.is_some();
             win::obs_window_spec(&exe, w.as_ref())
         });
-        Target { spec, game: self.current.as_ref().map(|g| g.name.clone()).unwrap_or_default(), pids: self.current_pids.clone() }
+        Target { spec, game: self.current.as_ref().map(|g| g.name.clone()).unwrap_or_default(), pids: self.current_pids.clone(), screen: false }
     }
 
     fn activate(&mut self, mode: &str) {
@@ -253,7 +261,10 @@ impl<O: Obs> Controller<O> {
         if game.provider == Some("lol") && self.start_providers && self.lol.is_none() {
             self.lol = Some(LeagueProvider::start(self.bus.clone()));
         }
-        if mode == FULL && !self.obs.recording() {
+        if mode == FULL && self.screen_rec {
+            logf!("{} will be recorded when the screen recording stops", game.name);
+            self.game_rec_waiting = true;
+        } else if mode == FULL && !self.obs.recording() {
             logf!("starting recording");
             let t = self.target();
             self.obs.start_recording(t);
@@ -307,6 +318,7 @@ impl<O: Obs> Controller<O> {
         }
         self.we_started_recording = false;
         self.we_started_replay = false;
+        self.game_rec_waiting = false;
         self.current_exe = None;
         self.current_pids.clear();
         self.window_found = false;
@@ -361,6 +373,28 @@ impl<O: Obs> Controller<O> {
         logf!("[replay] saving clip: {title}");
     }
 
+    /// Start or stop a screen recording. Returns what happened, for a notification.
+    pub fn toggle_screen(&mut self) -> &'static str {
+        if self.screen_rec {
+            logf!("stopping the screen recording");
+            self.obs.stop_recording();
+            return "stopped";
+        }
+        if self.obs.recording() {
+            logf!("screen recording not started: the game is already being recorded");
+            return "busy";
+        }
+        logf!("starting a screen recording");
+        self.screen_rec = true;
+        self.screen_since = unix_now();
+        self.obs.start_recording(Target { screen: true, ..Target::default() });
+        if !self.obs.recording() {
+            self.screen_rec = false; // OBS missing or failed to start (logged)
+            return "failed";
+        }
+        "started"
+    }
+
     pub fn mark_manual(&self) {
         let name = self.current.as_ref().map(|g| g.name.clone()).unwrap_or_else(|| "Manual".into());
         self.bus.emit(GameEvent::new("manual", &name, "hotkey"));
@@ -368,11 +402,17 @@ impl<O: Obs> Controller<O> {
 
     // ---- engine events ------------------------------------------------------------------
     pub fn on_recording_started(&mut self) {
-        self.session = Some(Session::new(mono(), self.current.as_ref().map(|g| g.name.clone())));
+        let game = if self.screen_rec { Some(crate::app::SCREEN_GAME.to_string()) } else { self.current.as_ref().map(|g| g.name.clone()) };
+        self.session = Some(Session::new(mono(), game));
         logf!("recording started, session open");
     }
 
     pub fn on_recording_stopped(&mut self, path: Option<String>) {
+        if std::mem::take(&mut self.screen_rec) && std::mem::take(&mut self.game_rec_waiting) && self.mode.as_deref() == Some(FULL) {
+            if let Some(mode) = self.mode.clone() {
+                self.activate(&mode); // the game started during the screen recording
+            }
+        }
         let (Some(session), Some(path)) = (self.session.take(), path) else { return };
         let s = &self.settings;
         let highlights = find_highlights(&session.markers, s.merge_gap, s.min_score, s.pre_roll, s.post_roll);
@@ -498,6 +538,39 @@ mod tests {
         c.tick();
         assert!(c.obs.calls.is_empty());
         assert_eq!(c.library.mode_for("Apex Legends"), ASK); // asked again next time
+    }
+
+    #[test]
+    fn screen_recording_toggles_and_lands_in_its_own_group() {
+        let running = Arc::new(Mutex::new(vec![]));
+        let (_d, mut c) = ctl(running, FULL);
+        assert_eq!(c.toggle_screen(), "started");
+        assert_eq!(c.obs.calls, vec!["start_recording "]);
+        assert_eq!(c.status()["screen"], true);
+        c.on_recording_started();
+        c.mark_manual();
+        c.tick();
+        assert!(c.obs.calls.contains(&"chapter Highlight".to_string()) || c.obs.calls.iter().any(|x| x.starts_with("chapter")));
+        assert_eq!(c.toggle_screen(), "stopped");
+        assert!(c.obs.calls.contains(&"stop_recording".to_string()));
+        c.on_recording_stopped(Some("s.mp4".into()));
+        assert!(!c.screen_rec);
+        assert!(matches!(&c.outbox[0], Media::Session { game: Some(g), markers, .. } if g == crate::app::SCREEN_GAME && markers.len() == 1));
+    }
+
+    #[test]
+    fn game_waits_for_the_screen_recording_then_records() {
+        let running = Arc::new(Mutex::new(vec![]));
+        let (_d, mut c) = ctl(running.clone(), FULL);
+        c.toggle_screen();
+        c.on_recording_started();
+        running.lock().unwrap().push("cs2.exe");
+        c.tick();
+        assert_eq!(c.obs.calls.iter().filter(|x| x.starts_with("start_recording")).count(), 1); // still the screen
+        c.toggle_screen();
+        c.on_recording_stopped(Some("s.mp4".into()));
+        assert!(c.obs.calls.last().unwrap().starts_with("start_recording ::cs2.exe"));
+        assert_eq!(c.toggle_screen(), "busy"); // the game is being recorded now
     }
 
     #[test]

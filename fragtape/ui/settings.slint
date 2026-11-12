@@ -1,0 +1,204 @@
+import { ScrollView } from "std-widgets.slint";
+import { Palette } from "theme.slint";
+import { Btn, Seg, Chips, Field, Opt, Box, PrefRow, Slide } from "widgets.slint";
+
+// One row of a settings tab. `kind` says how to draw it:
+//   heading · seg · slider · number · buttons · text · swatches · themes · note · log
+export struct SRow {
+    kind: string,
+    key: string,
+    label: string,
+    why: string,
+    options: [Opt],
+    current: string,
+    value: float,
+    min: float,
+    max: float,
+    text: string,
+    dim: bool,
+}
+export struct ThemeCard { id: string, name: string, sub: string, left: color, right: color }
+export struct Swatch { id: string, color: color, title: string }
+
+export global SettingsState {
+    in property <[Opt]> tabs: [{ value: "general", label: "General" }, { value: "recording", label: "Recording" }, { value: "advanced", label: "Advanced" },
+        { value: "appearance", label: "Appearance" }, { value: "storage", label: "Storage" }, { value: "kills", label: "Kill detection" }, { value: "about", label: "About" }];
+    in-out property <string> tab: "recording";
+    in property <[SRow]> rows;
+    in property <string> recinfo;
+    in property <[ThemeCard]> themes;
+    in property <string> theme;
+    in property <[Swatch]> swatches;
+    in property <string> accent;
+    callback pick-tab(string);
+    callback set(string, string);        // key, value (as text; Rust converts)
+    callback action(string, string);     // a button: row key, button value
+}
+
+component Tabs inherits HorizontalLayout {
+    spacing: 0;
+    alignment: start;
+    for t in SettingsState.tabs: Rectangle {
+        property <bool> on: t.value == SettingsState.tab;
+        width: tt.preferred-width + 28px;
+        height: 38px;
+        background: Palette.blocks && on ? Palette.accent : transparent;
+        tt := Text {
+            text: Palette.blocks ? t.label.to-uppercase() : t.label;
+            color: on ? (Palette.blocks ? Palette.on-accent : Palette.text) : (ta.has-hover ? Palette.text : Palette.muted);
+            font-size: Palette.blocks ? Palette.fs - 1px : Palette.fs + 0.5px;
+            font-weight: Palette.blocks ? 600 : 400;
+        }
+        Rectangle { y: parent.height - 2px; height: 2px; background: on && !Palette.blocks ? Palette.accent : transparent; }
+        ta := TouchArea { mouse-cursor: pointer; clicked => { SettingsState.pick-tab(t.value); } }
+    }
+}
+
+component NumberBox inherits HorizontalLayout {
+    in property <SRow> r;
+    spacing: 8px;
+    f := Field {
+        w: 110px;
+        text: r.text;
+        accepted(t) => { SettingsState.set(r.key, t); }
+    }
+    Text { text: r.why == "" ? "" : ""; }
+    Text { text: r.options.length > 0 ? r.options[0].label : ""; color: Palette.muted; font-size: Palette.fs - 1px; vertical-alignment: center; }
+}
+
+component SliderBox inherits HorizontalLayout {
+    in property <SRow> r;
+    property <float> live: r.value;
+    spacing: 10px;
+    Slide {
+        minimum: r.min; maximum: r.max; value: r.value;
+        moved(v) => { live = round(v); }
+        released(v) => { SettingsState.set(r.key, round(v)); }
+    }
+    Text { text: r.text; color: Palette.text; font-size: Palette.fs - 0.5px; vertical-alignment: center; min-width: 110px; }
+}
+
+export component SettingsPage inherits VerticalLayout {
+    spacing: 12px;
+    HorizontalLayout {
+        Text { text: "Settings"; color: Palette.text; font-size: Palette.fs + 11px; font-weight: Palette.gloss ? 300 : 400; vertical-alignment: center; }
+        Rectangle { horizontal-stretch: 1; }
+        Text { text: SettingsState.recinfo; color: Palette.muted; font-size: Palette.fs - 1px; vertical-alignment: center; }
+    }
+    VerticalLayout {
+        Tabs { }
+        Rectangle { height: 1px; background: Palette.line; }
+    }
+    ScrollView {
+        vertical-stretch: 1;
+        VerticalLayout {
+            padding-right: 6px;
+            alignment: start;
+            Rectangle {
+                background: Palette.panel;
+                border-radius: Palette.r-lg;
+                border-width: 1px;
+                border-color: Palette.line;
+                VerticalLayout {
+                    padding: 14px;
+                    padding-top: 6px;
+                    for r[i] in SettingsState.rows: VerticalLayout {
+                        opacity: r.dim ? 0.55 : 1;
+                        if r.kind == "heading": Text {
+                            text: r.label.to-uppercase();
+                            font-size: Palette.fs - 1.5px; font-weight: 600; letter-spacing: 0.8px; color: Palette.muted;
+                            height: 34px; vertical-alignment: bottom;
+                        }
+                        if r.kind == "note": Rectangle {
+                            height: max(40px, nt.preferred-height + 20px);
+                            border-radius: Palette.r-lg;
+                            background: #f59e0b1f;
+                            border-width: 1px; border-color: #f59e0b5a;
+                            HorizontalLayout {
+                                padding: 10px; spacing: 10px;
+                                nt := Text { text: r.label; color: Palette.light ? #92400e : #fde68a; font-size: Palette.fs - 0.5px; wrap: word-wrap; vertical-alignment: center; horizontal-stretch: 1; }
+                                for o in r.options: Btn { text: o.label; clicked => { SettingsState.action(r.key, o.value); } }
+                            }
+                        }
+                        if r.kind == "seg": PrefRow {
+                            label: r.label; why: r.why; first: i == 0;
+                            Seg { options: r.options; current: r.current; picked(v) => { SettingsState.set(r.key, v); } }
+                        }
+                        if r.kind == "slider": PrefRow {
+                            label: r.label; why: r.why; first: i == 0;
+                            SliderBox { r: r; }
+                        }
+                        if r.kind == "number": PrefRow {
+                            label: r.label; why: r.why; first: i == 0;
+                            NumberBox { r: r; }
+                        }
+                        if r.kind == "buttons": PrefRow {
+                            label: r.label; why: r.why; first: i == 0;
+                            if r.text != "": Text { text: r.text; color: Palette.text; font-size: Palette.fs - 0.5px; vertical-alignment: center; wrap: word-wrap; max-width: 340px; }
+                            for o[j] in r.options: Btn { text: o.label; primary: o.disabled; clicked => { SettingsState.action(r.key, o.value); } }
+                        }
+                        if r.kind == "text": PrefRow {
+                            label: r.label; why: r.why; first: i == 0;
+                            Text { text: r.text; color: Palette.text; font-size: Palette.fs - 0.5px; vertical-alignment: center; wrap: word-wrap; max-width: 420px; }
+                        }
+                        if r.kind == "themes": VerticalLayout {
+                            padding-top: 8px; padding-bottom: 10px;
+                            HorizontalLayout {
+                                spacing: 10px;
+                                alignment: start;
+                                for t in SettingsState.themes: Rectangle {
+                                    property <bool> on: t.id == SettingsState.theme;
+                                    width: 150px; height: 92px;
+                                    border-radius: Palette.r-sm;
+                                    background: Palette.card;
+                                    border-width: on ? 2px : 1px;
+                                    border-color: on ? Palette.accent : (tp.has-hover ? Palette.hover-line : Palette.line);
+                                    VerticalLayout {
+                                        padding: 7px; spacing: 5px;
+                                        HorizontalLayout {
+                                            height: 50px;
+                                            Rectangle { width: 30%; background: t.id == "vista" ? @linear-gradient(180deg, #96d7ffb3 0%, #145aaacc 100%) : t.left; }
+                                            Rectangle { background: t.id == "vista" ? @radial-gradient(circle, #2f7fb8 0%, #04101f 100%) : t.right; }
+                                        }
+                                        Text { text: t.name; color: Palette.text; font-size: Palette.fs - 0.5px; }
+                                    }
+                                    tp := TouchArea { mouse-cursor: pointer; clicked => { SettingsState.set("theme", t.id); } }
+                                }
+                            }
+                        }
+                        if r.kind == "swatches": PrefRow {
+                            label: r.label; why: r.why; first: i == 0;
+                            for s in SettingsState.swatches: Rectangle {
+                                width: 30px; height: 30px;
+                                border-radius: Palette.r-lg;
+                                border-width: 2px;
+                                border-color: s.id == SettingsState.accent ? Palette.text : transparent;
+                                Rectangle {
+                                    width: 20px; height: 20px;
+                                    border-radius: Palette.r-sm;
+                                    background: s.id == "theme" ? @linear-gradient(135deg, #ef4444 0%, #eab308 30%, #22c55e 55%, #3b82f6 80%, #8b5cf6 100%) : s.color;
+                                }
+                                TouchArea { mouse-cursor: pointer; clicked => { SettingsState.set("accent", s.id); } }
+                            }
+                        }
+                        if r.kind == "log": Rectangle {
+                            height: 260px;
+                            background: Palette.bg;
+                            border-radius: Palette.r-sm;
+                            border-width: 1px; border-color: Palette.line;
+                            ScrollView {
+                                Text {
+                                    x: 10px;
+                                    text: r.text; color: Palette.muted; font-size: 11.5px; font-family: "Consolas"; wrap: no-wrap;
+                                }
+                            }
+                        }
+                        if r.kind == "para": Text {
+                            text: r.text; color: Palette.muted; font-size: Palette.fs - 0.5px; wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

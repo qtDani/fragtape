@@ -1,0 +1,223 @@
+import { ScrollView } from "std-widgets.slint";
+import { Palette } from "theme.slint";
+import { Btn, Chips, Field, Opt, GameIcon } from "widgets.slint";
+import { Icon } from "icons.slint";
+
+export struct ClipCard { id: string, title: string, sub: string, kind: string, duration: string, moments: int, favorite: bool, thumb: image }
+export struct ClipGroup { game: string, letter: string, icon: image, count: string, cards: [ClipCard] }
+
+export global ClipsState {
+    in property <[ClipGroup]> groups;
+    in property <string> empty-title;
+    in property <string> empty-text;
+    in property <[Opt]> games;            // the game filter
+    in-out property <string> kind: "all";
+    in-out property <string> game: "";
+    in-out property <string> query;
+    callback open(string);
+    callback filter();
+    callback open-folder();
+    // right-click menu on a card
+    in-out property <string> renaming;   // id of the card whose title is being edited
+    callback rename(string, string);      // id, new title
+    callback delete(string, string);      // id, title (asks first)
+    callback favorite(string, bool);
+    callback reveal(string);
+}
+
+component MenuItem inherits Rectangle {
+    in property <string> text;
+    in property <bool> danger;
+    in property <bool> enabled: true;
+    callback clicked;
+    height: 30px;
+    border-radius: Palette.r-sm;
+    background: ta.has-hover && enabled ? (danger ? #ef444433 : Palette.card-hi) : transparent;
+    Text {
+        x: 10px;
+        text: root.text;
+        color: !enabled ? Palette.faint : danger ? #f87171 : Palette.text;
+        font-size: Palette.fs;
+        vertical-alignment: center;
+    }
+    ta := TouchArea { mouse-cursor: enabled ? pointer : default; clicked => { if enabled { root.clicked(); } } }
+}
+
+component Badge inherits Rectangle {
+    in property <string> text;
+    in property <color> bg;
+    height: 18px;
+    width: t.preferred-width + 12px;
+    border-radius: Palette.r-sm;
+    background: bg;
+    t := Text { text: root.text; color: white; font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; }
+}
+
+component Card inherits Rectangle {
+    in property <ClipCard> c;
+    background: Palette.panel;
+    border-radius: Palette.r-lg;
+    border-width: 1px;
+    border-color: ta.has-hover ? Palette.hover-line : Palette.line;
+    clip: true;
+    VerticalLayout {
+        th := Rectangle {
+            height: root.width * 9 / 16;
+            background: #0a0a0a;
+            Image { source: c.thumb; width: parent.width; height: parent.height; image-fit: cover; }
+            Badge {
+                x: 8px; y: 8px;
+                text: c.kind == "live" ? "● REC" : c.kind == "clip" ? "CLIP" : "SESSION";
+                bg: c.kind == "clip" ? Palette.clip : Palette.rec;
+            }
+            if c.favorite: Text { x: parent.width - 24px; y: 6px; text: "★"; color: #facc15; font-size: 16px; }
+            if c.duration != "": Rectangle {
+                x: parent.width - self.width - 8px; y: parent.height - 26px;
+                height: 18px; width: dt.preferred-width + 10px;
+                background: #000000c0;
+                dt := Text { text: c.duration; color: white; font-size: 11.5px; }
+            }
+            if c.moments > 0: Rectangle {
+                x: 8px; y: parent.height - 26px;
+                height: 18px; width: mt.preferred-width + 26px;
+                background: #000000c0;
+                HorizontalLayout {
+                    padding-left: 5px; spacing: 3px;
+                    Icon { y: 3px; name: "objective"; tint: white; size: 12px; }
+                    mt := Text { text: c.moments; color: white; font-size: 11.5px; vertical-alignment: center; }
+                }
+            }
+        }
+        VerticalLayout {
+            padding: 10px;
+            spacing: 2px;
+            if ClipsState.renaming != c.id: Text { text: c.title; color: Palette.text; font-size: Palette.fs; font-weight: 600; overflow: elide; }
+            if ClipsState.renaming == c.id: FocusScope {
+                height: 18px;
+                key-pressed(e) => {
+                    if e.text == Key.Escape { ClipsState.renaming = ""; return accept; }
+                    reject
+                }
+                ti := TextInput {
+                    text: c.title;
+                    color: Palette.text;
+                    font-size: Palette.fs;
+                    font-weight: 600;
+                    single-line: true;
+                    selection-background-color: Palette.accent.with-alpha(0.4);
+                    init => { self.focus(); self.select-all(); }
+                    accepted => { ClipsState.renaming = ""; ClipsState.rename(c.id, self.text); }
+                    changed has-focus => {
+                        // clicking elsewhere keeps the new name, like Explorer
+                        if !self.has-focus && ClipsState.renaming == c.id {
+                            ClipsState.renaming = "";
+                            ClipsState.rename(c.id, self.text);
+                        }
+                    }
+                }
+                Rectangle { y: parent.height; height: 1px; background: Palette.accent; }
+            }
+            Text { text: c.sub; color: Palette.muted; font-size: Palette.fs - 1.5px; overflow: elide; }
+        }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { if ClipsState.renaming != c.id { ClipsState.open(c.id); } }
+        pointer-event(e) => {
+            if e.button == PointerEventButton.right && e.kind == PointerEventKind.up {
+                root.menu-x = min(self.mouse-x, root.width - 170px);
+                root.menu-y = self.mouse-y;
+                menu.show();
+            }
+        }
+    }
+    property <bool> live: c.kind == "live";
+    property <length> menu-x;
+    property <length> menu-y;
+    menu := PopupWindow {
+        x: root.menu-x;
+        y: root.menu-y;
+        width: 170px;
+        Rectangle {
+            background: Palette.panel;
+            border-radius: Palette.r-lg;
+            border-width: 1px;
+            border-color: Palette.line;
+            drop-shadow-blur: 12px;
+            drop-shadow-color: #00000080;
+            VerticalLayout {
+                padding: 4px;
+                MenuItem { text: "Open"; clicked => { ClipsState.open(c.id); } }
+                MenuItem { text: "Rename"; enabled: !live; clicked => { ClipsState.renaming = c.id; } }
+                MenuItem { text: c.favorite ? "Remove from favorites" : "Add to favorites"; clicked => { ClipsState.favorite(c.id, !c.favorite); } }
+                MenuItem { text: "Show in folder"; clicked => { ClipsState.reveal(c.id); } }
+                Rectangle { height: 9px; Rectangle { height: 1px; background: Palette.line; } }
+                MenuItem { text: live ? "Delete (recording…)" : "Delete"; danger: true; enabled: !live; clicked => { ClipsState.delete(c.id, c.title); } }
+            }
+        }
+    }
+}
+
+export component ClipsPage inherits VerticalLayout {
+    spacing: 14px;
+    // header: title, type filter, search, folder; the game filter gets its own row so it never pushes things off
+    HorizontalLayout {
+        spacing: 12px;
+        Text { text: "Tapes"; color: Palette.text; font-size: Palette.fs + 11px; font-weight: Palette.gloss ? 300 : 400; vertical-alignment: center; }
+        Chips {
+            options: [{ value: "all", label: "All" }, { value: "clip", label: "Highlights" }, { value: "session", label: "Sessions" }, { value: "fav", label: "★" }];
+            current: ClipsState.kind;
+            picked(v) => { ClipsState.kind = v; ClipsState.filter(); }
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Field { w: 170px; placeholder: "Search…"; text <=> ClipsState.query; edited => { ClipsState.filter(); } }
+        Btn { text: "Open folder"; clicked => { ClipsState.open-folder(); } }
+    }
+    if ClipsState.games.length > 1: Flickable {
+        height: gc.preferred-height;
+        viewport-width: max(self.width, gc.preferred-width);
+        interactive: true;
+        gc := Chips {
+            options: ClipsState.games;
+            current: ClipsState.game;
+            picked(v) => { ClipsState.game = v; ClipsState.filter(); }
+        }
+    }
+    if ClipsState.groups.length == 0: VerticalLayout {
+        padding-top: 80px;
+        spacing: 6px;
+        Text { text: ClipsState.empty-title; color: Palette.text; font-size: Palette.fs + 4px; font-weight: 700; horizontal-alignment: center; }
+        Text { text: ClipsState.empty-text; color: Palette.muted; font-size: Palette.fs; horizontal-alignment: center; }
+    }
+    if ClipsState.groups.length > 0: ScrollView {
+        vertical-stretch: 1;
+        property <length> gap: 16px;
+        property <length> avail: self.visible-width - 4px;
+        property <int> cols: max(1, floor((avail + gap) / (Palette.thumb + gap)));
+        property <length> cw: (avail - (cols - 1) * gap) / cols;
+        property <length> ch: cw * 9 / 16 + 56px;
+        VerticalLayout {
+            spacing: 18px;
+            for g in ClipsState.groups: VerticalLayout {
+                spacing: 10px;
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: start;
+                    GameIcon { img: g.icon; letter: g.letter; size: 26px; }
+                    Text { text: g.game; color: Palette.text; font-size: Palette.fs + 1px; font-weight: 600; vertical-alignment: center; }
+                    Text { text: g.count; color: Palette.faint; font-size: Palette.fs - 1px; vertical-alignment: center; }
+                }
+                Rectangle {
+                    height: ceil(g.cards.length / cols) * (ch + gap) - gap;
+                    for c[i] in g.cards: Card {
+                        x: mod(i, cols) * (cw + gap);
+                        y: floor(i / cols) * (ch + gap);
+                        width: cw;
+                        height: ch;
+                        c: c;
+                    }
+                }
+            }
+        }
+    }
+}

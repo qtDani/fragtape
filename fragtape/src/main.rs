@@ -18,7 +18,9 @@ mod quality;
 mod server;
 mod toast;
 mod tray;
+mod ui;
 mod util;
+mod video;
 mod win;
 
 fn main() {

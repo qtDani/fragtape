@@ -44,6 +44,7 @@ pub struct Options {
     pub monitor_id: String,
     pub audio: String,
     pub mic_mono: bool,
+    pub cursor: bool,
     /// Extra microphone gain in dB (a limiter after it stops clipping).
     pub mic_boost: i64,
     pub replay_seconds: i64,
@@ -137,12 +138,12 @@ pub fn scene_collection(o: &Options) -> Value {
     // Separate tracks: 1 = everything, 2 = game, 3 = mic, 4 = desktop.
     let (game_mix, mic_mix, desk_mix) = if o.separate_tracks { (1 | 2, 1 | 4, 1 | 8) } else { (255, 255, 255) };
     let spec = &o.window_spec;
-    let window = source(WINDOW, "window_capture", json!({"window": spec, "priority": 2, "method": 2, "cursor": false,
+    let window = source(WINDOW, "window_capture", json!({"window": spec, "priority": 2, "method": 2, "cursor": o.cursor,
                                                          "client_area": true, "compatibility": false}), false, 0, 0);
     let game = source(GAME, "game_capture", json!({"capture_mode": "window", "window": spec, "priority": 2,
-                                                   "capture_cursor": false, "allow_transparency": false,
+                                                   "capture_cursor": o.cursor, "allow_transparency": false,
                                                    "anti_cheat_hook": true, "capture_audio": false}), false, 0, 0);
-    let screen = source(SCREEN, "monitor_capture", json!({"monitor_id": o.monitor_id, "capture_cursor": true}), false, 0, 0);
+    let screen = source(SCREEN, "monitor_capture", json!({"monitor_id": o.monitor_id, "capture_cursor": o.cursor}), false, 0, 0);
     let audio = source(GAME_AUDIO, "wasapi_process_output_capture", json!({"window": spec, "priority": 2}),
                        muted(GAME_AUDIO), 0, game_mix);
     let screen_mode = o.capture == "screen";
@@ -515,7 +516,9 @@ impl EngineObs {
             for (name, muted) in audio_mutes(&o.audio) {
                 let _ = self.engine.request("SetInputMute", Some(json!({"inputName": name, "inputMuted": muted})), 5);
             }
-            let _ = self.engine.request("SetInputSettings", Some(json!({"inputName": SCREEN, "inputSettings": {"monitor_id": o.monitor_id}})), 5);
+            let _ = self.engine.request("SetInputSettings", Some(json!({"inputName": SCREEN, "inputSettings": {"monitor_id": o.monitor_id, "capture_cursor": o.cursor}})), 5);
+            let _ = self.engine.request("SetInputSettings", Some(json!({"inputName": GAME, "inputSettings": {"capture_cursor": o.cursor}})), 5);
+            let _ = self.engine.request("SetInputSettings", Some(json!({"inputName": WINDOW, "inputSettings": {"cursor": o.cursor}})), 5);
             for (id, on) in capture_items(&o.capture) {
                 let _ = self.engine.request("SetSceneItemEnabled", Some(json!({"sceneName": SCENE, "sceneItemId": id, "sceneItemEnabled": on})), 5);
             }
@@ -596,7 +599,7 @@ mod tests {
             rec_dir: PathBuf::from(r"C:\Videos\Fragtape\Game"), encoder: "obs_nvenc_h264_tex".into(),
             encoder_settings: json!({"rate_control": "CQP"}), fps: 144, base: (2560, 1440), out: (1920, 1080),
             scale_filter: "lanczos".into(), color: "NV12".into(), capture: "game".into(), monitor_id: "DISPLAY1".into(), audio: "game_mic".into(),
-            mic_mono: true, mic_boost: 12, replay_seconds: 30, replay_mb: 2048, window_spec: "T:C:game.exe".into(), audio_bitrate: 192,
+            mic_mono: true, cursor: true, mic_boost: 12, replay_seconds: 30, replay_mb: 2048, window_spec: "T:C:game.exe".into(), audio_bitrate: 192,
             sample_rate: 48000, separate_tracks: true, format: "hybrid_mp4".into(), priority: "above_normal".into(),
         }
     }

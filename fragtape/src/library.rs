@@ -28,6 +28,7 @@ pub fn pref_specs() -> Vec<(&'static str, Spec, Value)> {
         ("capture", Choice(&["game", "screen"]), json!("game")),
         ("audio", Choice(&["game", "game_mic", "all"]), json!("game")),
         ("mic_mono", Bool, json!(true)),
+        ("cursor", Bool, json!(true)),
         ("mic_boost", Int(&[0, 6, 12, 18, 24]), json!(6)),
         ("quality", Choice(&["small", "balanced", "high", "max", "custom"]), json!("high")),
         ("fps", Int(&[30, 60]), json!(60)),

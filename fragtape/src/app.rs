@@ -91,6 +91,7 @@ pub fn build_options(s: &Shared, t: &Target) -> Options {
         monitor_id: win::monitor_device_id(if t.screen { &[] } else { &t.pids }).unwrap_or_default(),
         audio,
         mic_mono: p["mic_mono"] == true,
+        cursor: p["cursor"] != false,
         mic_boost: int("mic_boost"),
         replay_seconds: int("clip_length"),
         replay_mb: int("adv_replay_mb"),

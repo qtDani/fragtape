@@ -225,6 +225,7 @@ pub fn settings_rows(tab: &str, state: &Value, gsi_note: &str) -> Vec<SRow> {
         "recording" => {
             r.push(seg(p, "capture", "Capture", &[("game", "Game window"), ("screen", "Whole screen")], &|v| if v == "screen" {
                 "The whole monitor: use this if a game's anti-cheat blocks game capture (black video).".into() } else { "Only the game, nothing else on your screen.".into() }));
+            r.push(seg(p, "cursor", "Record cursor", &onoff, &|v| if v == "true" { "Your mouse pointer shows in the video (only when the game shows it).".into() } else { "No mouse pointer in the video.".into() }));
             r.push(seg(p, "audio", "Audio", &[("game", "Game"), ("game_mic", "Game + mic"), ("all", "All PC sound")], &|v| match v {
                 "game_mic" => "The game's sound and your microphone.".into(), "all" => "Everything you hear, plus your microphone.".into(),
                 _ => "Only the game's sound: no Discord, music or notifications.".into() }));

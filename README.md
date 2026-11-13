@@ -17,6 +17,17 @@ you play, and your own OBS setup is never touched.
 <td><img src="docs/screenshots/settings.png" alt="Settings: recording options"></td>
 </tr></table>
 
+## Installing
+
+Run **`Fragtape-Setup-<version>.exe`**. It installs for your user only (no admin prompt) into
+`%LOCALAPPDATA%\Programs\Fragtape`, adds a Start menu shortcut (a desktop one is optional)
+and an entry in *Settings → Apps* to uninstall it.
+
+- **Updating:** run the newer setup. It closes Fragtape first; if a game is being
+  recorded, the recording is finished and saved before it closes.
+- **Uninstalling:** your videos in `Videos\Fragtape` are always kept. You're asked whether
+  to also delete Fragtape's settings, game list and cache.
+
 ## Using it
 
 Start **Fragtape** from the Start menu. It lives in the tray:

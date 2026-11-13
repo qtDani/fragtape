@@ -353,6 +353,16 @@ pub fn recycle(path: &Path) -> Result<(), String> {
 }
 
 /// Hold a named mutex for the process lifetime; false if another copy already holds it.
+/// Is another copy holding this single-instance mutex? (Doesn't create it.)
+pub fn instance_running(name: &str) -> bool {
+    unsafe {
+        let h = OpenMutexW(0x0010_0000 /* SYNCHRONIZE */, 0, wide(name).as_ptr());
+        if h.is_null() { return false; }
+        CloseHandle(h);
+        true
+    }
+}
+
 pub fn single_instance(name: &str) -> bool {
     unsafe {
         let h = CreateMutexW(std::ptr::null(), 0, wide(name).as_ptr());

@@ -207,6 +207,7 @@ pub fn post(s: &Shared, path: &str, b: &Value) -> Result<Value, String> {
         "/api/screen" => s.send(Cmd::ScreenRec),
         "/api/stop" => s.send(Cmd::Stop),
         "/api/show" => s.send(Cmd::Show),
+        "/api/quit" => s.send(Cmd::Quit),
         _ => return Err("not found".into()),
     }
     Ok(json!({"ok": true}))

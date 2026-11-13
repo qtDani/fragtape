@@ -421,6 +421,11 @@ pub fn pick_file(title: &str, filter: (&str, &str), start_dir: Option<&Path>) ->
     (unsafe { GetOpenFileNameW(&mut ofn) } != 0).then(|| from_wide(&buf))
 }
 
+/// Is this window the one in front (has the keyboard focus)?
+pub fn is_foreground(hwnd: isize) -> bool {
+    unsafe { GetForegroundWindow() as isize == hwnd }
+}
+
 /// A Yes/No question in a standard Windows message box (owned by the active window).
 pub fn confirm(title: &str, text: &str) -> bool {
     unsafe { MessageBoxW(GetForegroundWindow(), wide(text).as_ptr(), wide(title).as_ptr(), MB_YESNO | MB_ICONQUESTION) == IDYES }

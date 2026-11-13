@@ -175,7 +175,7 @@ export component ClipsPage inherits VerticalLayout {
     }
     if ClipsState.games.length > 1: Flickable {
         height: gc.preferred-height;
-        viewport-width: max(self.width, gc.preferred-width);
+        content-width: max(self.width, gc.preferred-width);
         interactive: true;
         gc := Chips {
             options: ClipsState.games;

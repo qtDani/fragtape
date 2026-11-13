@@ -34,6 +34,8 @@ struct Ui {
     toast_timer: Timer,
     _refresh: Timer,
     frames: Timer,
+    watch: Timer,
+    view: (bool, bool, u32, u32),   // minimized, in front, size: when it changes, repaint everything
 }
 
 thread_local! {
@@ -75,7 +77,7 @@ fn with<R>(f: impl FnOnce(&mut Ui) -> R) -> Option<R> {
 }
 
 fn open(s: Arc<Shared>) {
-    if let Some(()) = with(|u| { let _ = u.win.show(); bring_to_front(&u.win); }) {
+    if let Some(()) = with(|u| { let _ = u.win.show(); bring_to_front(&u.win); full_repaint(&u.win); }) {
         return;
     }
     let win = match AppWindow::new() {
@@ -93,12 +95,14 @@ fn open(s: Arc<Shared>) {
     let ui = Rc::new(RefCell::new(Ui {
         win: win.clone_strong(), s: s.clone(), work, cache: Default::default(), state: Value::Null, clips: vec![], keys: Default::default(),
         player: None, gsi_note: String::new(), search: Default::default(), toast_timer: Timer::default(), _refresh: Timer::default(), frames: Timer::default(),
+        watch: Timer::default(), view: Default::default(),
     }));
     UI.with(|u| *u.borrow_mut() = Some(ui.clone()));
     wire(&win, &s);
     refresh(true);
     // refresh every second; frames every ~16 ms while the player is open
     ui.borrow()._refresh.start(TimerMode::Repeated, Duration::from_millis(1000), || refresh(false));
+    ui.borrow().watch.start(TimerMode::Repeated, Duration::from_millis(200), watch_view);
     win.window().on_close_requested(|| {
         // close = free everything; Fragtape keeps running in the tray
         let _ = slint::invoke_from_event_loop(|| {
@@ -131,6 +135,35 @@ fn bring_to_front(win: &AppWindow) {
             crate::win::bring_to_front(h.hwnd.get() as _);
         }
     }
+}
+
+/// The software renderer only redraws what changed and reuses the last frame for the rest.
+/// Windows sometimes throws that frame away (minimize, restore, covered, sleep, display change),
+/// which left only bits of the window drawn over the desktop. So whenever the window's state
+/// changes, redraw all of it. Flipping an invisible full-window overlay marks everything dirty.
+fn full_repaint(win: &AppWindow) {
+    let a = win.global::<AppState>();
+    a.set_repaint(!a.get_repaint());
+}
+
+fn watch_view() {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    with(|u| {
+        let w = u.win.window();
+        let front = match w.window_handle().window_handle().map(|h| h.as_raw()) {
+            Ok(RawWindowHandle::Win32(h)) => crate::win::is_foreground(h.hwnd.get() as _),
+            _ => false,
+        };
+        let s = w.size();
+        let v = (w.is_minimized(), front, s.width, s.height);
+        if v != u.view {
+            u.view = v;
+            full_repaint(&u.win);
+            // and once more a moment later, after Windows has finished restoring/resizing
+            let ww = u.win.as_weak();
+            Timer::single_shot(Duration::from_millis(300), move || { if let Some(w) = ww.upgrade() { full_repaint(&w); } });
+        }
+    });
 }
 
 // ---- refresh -------------------------------------------------------------------------------------

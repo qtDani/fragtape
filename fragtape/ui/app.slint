@@ -34,6 +34,7 @@ export global AppState {
     // a short message at the bottom
     in property <string> toast;
     in property <bool> toast-error;
+    in property <bool> repaint;           // flipped to force a full redraw (see ui/mod.rs full_repaint)
     callback nav(string);
     callback mark();
     callback stop();
@@ -225,4 +226,7 @@ export component AppWindow inherits Window {
         border-color: AppState.toast-error ? #ef4444 : Palette.line;
         tt := Text { text: AppState.toast; color: Palette.text; font-size: Palette.fs; wrap: word-wrap; horizontal-alignment: center; width: parent.width - 32px; }
     }
+
+    // invisible; flipping its colour makes the renderer redraw the whole window
+    Rectangle { x: 0; y: 0; width: parent.width; height: parent.height; background: AppState.repaint ? #00000001 : #00000000; }
 }

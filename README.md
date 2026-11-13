@@ -178,6 +178,15 @@ cargo test --release
 cargo build --release      # target\release\fragtape.exe
 ```
 
+The installer (needs [Inno Setup 6](https://jrsoftware.org/isinfo.php): `winget install JRSoftware.InnoSetup`):
+
+```
+installer/build.ps1        # dist/Fragtape-Setup-<version>.exe
+```
+
+The version comes from `fragtape/Cargo.toml`; the setup script is `installer/fragtape.iss`.
+`Fragtape.exe --quit` asks a running copy to finish its recording and close (the installer uses it).
+
 | File | What it does |
 | --- | --- |
 | `app.rs` | wiring: shared state, main loop, window, first-run migration |

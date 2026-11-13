@@ -115,7 +115,6 @@ pub struct WindowInfo {
     pub hwnd: isize,
     pub title: String,
     pub class: String,
-    pub visible: bool,
 }
 
 fn enum_windows() -> Vec<(isize, u32)> {
@@ -138,7 +137,7 @@ pub fn window_info(hwnd: isize) -> WindowInfo {
     unsafe {
         GetWindowTextW(h, title.as_mut_ptr(), 512);
         GetClassNameW(h, class.as_mut_ptr(), 256);
-        WindowInfo { hwnd, title: from_wide(&title), class: from_wide(&class), visible: IsWindowVisible(h) != 0 }
+        WindowInfo { hwnd, title: from_wide(&title), class: from_wide(&class) }
     }
 }
 
@@ -184,13 +183,6 @@ pub fn close_windows(pid: u32, prefix: &str) -> bool {
         }
     }
     any
-}
-
-/// A visible Chromium/Edge window with exactly this title.
-pub fn find_browser_window(title: &str) -> Option<isize> {
-    enum_windows().into_iter().map(|(h, _)| window_info(h)).find(|w| {
-        w.visible && w.title == title && w.class.starts_with("Chrome_WidgetWin")
-    }).map(|w| w.hwnd)
 }
 
 pub fn bring_to_front(hwnd: isize) {
@@ -384,7 +376,7 @@ mod tests {
 
     #[test]
     fn window_spec_escapes() {
-        let w = WindowInfo { hwnd: 0, title: "A:B #1".into(), class: "C".into(), visible: true };
+        let w = WindowInfo { hwnd: 0, title: "A:B #1".into(), class: "C".into() };
         assert_eq!(obs_window_spec("game.exe", Some(&w)), "A#3AB #221:C:game.exe");
         assert_eq!(obs_window_spec("game.exe", None), "::game.exe");
     }

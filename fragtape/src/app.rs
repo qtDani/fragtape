@@ -134,7 +134,6 @@ pub fn state(s: &Shared) -> Value {
         "games": games,
         "db": {"ready": s.gamedb.ready(), "count": s.gamedb.count()},
         "scanning": s.scanning.load(Ordering::Relaxed),
-        "page_rev": server::PAGE.len(),
         "app": {
             "version": env!("CARGO_PKG_VERSION"),
             "obs_found": obs.is_some(),
@@ -255,40 +254,8 @@ pub fn browse_obs(s: &Shared) -> Result<Option<PathBuf>, String> {
     }
 }
 
-fn edge_path() -> Option<PathBuf> {
-    for root in [win::HKCU, win::HKLM] {
-        if let Some(p) = win::reg_string(root, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\msedge.exe", "") {
-            if Path::new(&p).exists() {
-                return Some(p.into());
-            }
-        }
-    }
-    ["ProgramFiles(x86)", "ProgramFiles"].iter().filter_map(|v| std::env::var(v).ok())
-        .map(|b| PathBuf::from(b).join(r"Microsoft\Edge\Application\msedge.exe")).find(|p| p.exists())
-}
-
 pub fn open_window(s: &Arc<Shared>) {
-    if crate::ui::enabled() {
-        return crate::ui::show(s.clone());
-    }
-    open_web_window(s);
-}
-
-/// The old window: the HTML page in an Edge app window (used with FRAGTAPE_WEB_UI=1).
-pub fn open_web_window(s: &Shared) {
-    if let Some(h) = win::find_browser_window("Fragtape") {
-        return win::bring_to_front(h);
-    }
-    let url = format!("http://127.0.0.1:{}/?t={}", s.port, s.token);
-    match edge_path() {
-        Some(edge) => {
-            let _ = win::command(edge).arg(format!("--app={url}")).arg(format!("--user-data-dir={}", local_dir().join("window").display()))
-                .args(["--window-size=1280,860", "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"]).spawn();
-        }
-        None => {
-            let _ = std::process::Command::new("explorer").arg(url).spawn();
-        }
-    }
+    crate::ui::show(s.clone());
 }
 
 /// The first-time question: an in-game card (see toast.rs). If it times out, the
@@ -383,9 +350,7 @@ pub fn run(show_window: bool) {
     }
 
     crate::toast::set_look(&library.prefs());
-    if crate::ui::enabled() {
-        crate::ui::init();
-    }
+    crate::ui::init();
     server::start(shared.clone());
     let gsi = Arc::new(providers::Gsi::default());
     let s2 = shared.clone();
@@ -572,12 +537,8 @@ pub fn run(show_window: bool) {
     let s = shared.clone();
     let p = library.prefs();
     let hotkeys = [p["hotkey"].as_str().unwrap_or("off"), p["rec_hotkey"].as_str().unwrap_or("off")];
-    if crate::ui::enabled() {
-        // the window system runs this thread's messages (the tray's too) until quit
-        tray::run(Box::new(move |c| s.send(c)), menu, hotkeys, Some(crate::ui::run_loop), Some(crate::ui::quit));
-    } else {
-        tray::run(Box::new(move |c| s.send(c)), menu, hotkeys, None, None);
-    }
+    // the window system runs this thread's messages (the tray's too) until quit
+    tray::run(Box::new(move |c| s.send(c)), menu, hotkeys, Some(crate::ui::run_loop), Some(crate::ui::quit));
     // tray closed: make sure the loop finishes the recording and closes OBS
     shared.send(Cmd::Quit);
     let _ = loop_thread.join();

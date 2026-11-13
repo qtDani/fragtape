@@ -70,17 +70,6 @@ impl Icons {
         }
         found
     }
-
-    /// Icon of a game in the search results (not in the library yet): Discord's, cached.
-    pub fn for_db(&self, id: &str, url: &str) -> Option<Vec<u8>> {
-        let k = format!("db-{}", id.chars().filter(|c| c.is_ascii_digit()).collect::<String>());
-        if let Some(d) = self.cached(&k) {
-            return Some(d);
-        }
-        let d = http::get(url, 8000, false).ok()?;
-        self.store(&k, &d);
-        Some(d)
-    }
 }
 
 /// Full paths of the game's .exe files that exist on this PC.

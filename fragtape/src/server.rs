@@ -5,8 +5,7 @@
 //! which can't send headers). Cross-site pages can't add custom headers without
 //! a CORS preflight, which this server never approves.
 
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::Read;
 use std::sync::Arc;
 
 use serde_json::{json, Value};
@@ -17,7 +16,6 @@ use crate::events::has_kill_detection;
 use crate::library::MODES;
 use crate::logf;
 
-pub const PAGE: &str = include_str!("../assets/app.html");
 
 fn header(k: &str, v: &str) -> Header {
     Header::from_bytes(k.as_bytes(), v.as_bytes()).unwrap()
@@ -85,57 +83,11 @@ fn handle(s: &Shared, mut req: Request) {
     let url = req.url().to_string();
     let path = url.split('?').next().unwrap_or("").to_string();
     let qs = query(&url);
-    let header_ok = req.headers().iter().any(|h| h.field.equiv("X-Fragtape-Token") && h.value.as_str() == s.token);
-    let query_ok = q(&qs, "t") == s.token;
-
-    if *req.method() == Method::Get && path == "/" {
-        let resp = if query_ok {
-            let p = s.library.prefs();
-            let st = |k: &str| p[k].as_str().unwrap_or("").to_string();
-            // set before the first paint, so the window never flashes the default look
-            let look = format!(r#"data-accent="{}" data-text="{}" data-thumbs="{}" data-motion="{}""#, st("accent"), st("text_size"),
-                               st("thumb_size"), if p["animations"] == false { "off" } else { "on" });
-            Response::from_data(PAGE.replace("__TOKEN__", &s.token).replace("__THEME__", &st("theme")).replace("__LOOK__", &look).into_bytes())
-                .with_header(header("Content-Type", "text/html; charset=utf-8")).with_header(header("Cache-Control", "no-store"))
-        } else {
-            Response::from_data(b"Open Fragtape from its tray icon.".to_vec()).with_status_code(403)
-        };
-        let _ = req.respond(resp);
-        return;
-    }
-    // Media URLs carry the token in the query; the API needs the header.
-    if !(header_ok || (query_ok && *req.method() == Method::Get && !path.starts_with("/api/"))) {
+    if !req.headers().iter().any(|h| h.field.equiv("X-Fragtape-Token") && h.value.as_str() == s.token) {
         let _ = req.respond(json_resp(403, &json!({"error": "forbidden"})));
         return;
     }
     if *req.method() == Method::Get {
-        if let Some(id) = path.strip_prefix("/media/") {
-            return send_video(s, req, id);
-        }
-        if let Some(rest) = path.strip_prefix("/icon/") {
-            let data = if let Some(id) = rest.strip_prefix("db/") {
-                s.gamedb.get(id).and_then(|g| g.icon_url()).and_then(|u| s.icons.for_db(id, &u))
-            } else {
-                s.library.games().into_iter().find(|g| g["name"].as_str().is_some_and(|n| crate::icons::key(n) == rest))
-                    .and_then(|g| { let url = crate::app::discord_icon_url(s, &g); s.icons.for_game(&g, url) })
-            };
-            let resp = match data {
-                Some(d) => Response::from_data(d.clone()).with_header(header("Content-Type", crate::icons::content_type(&d)))
-                    .with_header(header("Cache-Control", "private, max-age=86400")),
-                None => Response::from_data(b"no icon".to_vec()).with_status_code(404),
-            };
-            let _ = req.respond(resp);
-            return;
-        }
-        if let Some(id) = path.strip_prefix("/thumb/") {
-            let resp = match s.clips.thumb_path(id).and_then(|p| std::fs::read(p).ok()) {
-                Some(data) => Response::from_data(data).with_header(header("Content-Type", "image/jpeg"))
-                    .with_header(header("Cache-Control", "private, max-age=86400")),
-                None => Response::from_data(b"not found".to_vec()).with_status_code(404),
-            };
-            let _ = req.respond(resp);
-            return;
-        }
         let (code, body) = match path.as_str() {
             "/api/state" => (200, crate::app::state(s)),
             "/api/clips" => (200, json!({"clips": s.clips.list(s.active_path.lock().unwrap().as_deref())})),
@@ -150,14 +102,9 @@ fn handle(s: &Shared, mut req: Request) {
         return;
     }
     let mut body = Vec::new();
-    let limit = if path == "/api/thumb" { 4_000_000 } else { 100_000 };
-    let _ = req.as_reader().take(limit).read_to_end(&mut body);
-    let result = if path == "/api/thumb" {
-        s.clips.save_thumb(q(&qs, "id"), &body).map(|_| json!({"ok": true}))
-    } else {
-        let v: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
-        post(s, &path, &v)
-    };
+    let _ = req.as_reader().take(100_000).read_to_end(&mut body);
+    let v: Value = serde_json::from_slice(&body).unwrap_or(json!({}));
+    let result = post(s, &path, &v);
     let resp = match result {
         Ok(v) => json_resp(200, &v),
         Err(e) if e == "not found" => json_resp(404, &json!({"error": e})),
@@ -263,49 +210,6 @@ pub fn post(s: &Shared, path: &str, b: &Value) -> Result<Value, String> {
         _ => return Err("not found".into()),
     }
     Ok(json!({"ok": true}))
-}
-
-/// Serve a video with HTTP range support so the player can seek.
-fn send_video(s: &Shared, req: Request, id: &str) {
-    let Some(path) = s.clips.path_for(id) else {
-        let _ = req.respond(json_resp(404, &json!({"error": "not found"})));
-        return;
-    };
-    let Ok(mut f) = File::open(&path) else {
-        let _ = req.respond(json_resp(404, &json!({"error": "not found"})));
-        return;
-    };
-    let size = f.metadata().map(|m| m.len()).unwrap_or(0);
-    let range = req.headers().iter().find(|h| h.field.equiv("Range")).map(|h| h.value.to_string());
-    let (mut start, mut end, partial) = (0u64, size.saturating_sub(1), false);
-    let partial = match range.as_deref().and_then(|r| r.strip_prefix("bytes=")) {
-        Some(r) => {
-            let first = r.split(',').next().unwrap_or("");
-            let (a, b) = first.split_once('-').unwrap_or((first, ""));
-            if let Ok(a) = a.parse::<u64>() {
-                start = a;
-                if let Ok(b) = b.parse::<u64>() { end = b.min(size.saturating_sub(1)); }
-            } else if let Ok(n) = b.parse::<u64>() {
-                start = size.saturating_sub(n);
-            }
-            true
-        }
-        None => partial,
-    };
-    if start > end && size > 0 {
-        let _ = req.respond(Response::empty(416).with_header(header("Content-Range", &format!("bytes */{size}"))));
-        return;
-    }
-    let len = if size == 0 { 0 } else { end - start + 1 };
-    let _ = f.seek(SeekFrom::Start(start));
-    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-    let ctype = if ext == "mkv" { "video/x-matroska" } else { "video/mp4" };
-    let mut headers = vec![header("Content-Type", ctype), header("Accept-Ranges", "bytes")];
-    if partial {
-        headers.push(header("Content-Range", &format!("bytes {start}-{end}/{size}")));
-    }
-    let resp = Response::new((if partial { 206 } else { 200 }).into(), headers, f.take(len), Some(len as usize), None);
-    let _ = req.respond(resp);
 }
 
 #[cfg(test)]

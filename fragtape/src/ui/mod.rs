@@ -47,11 +47,6 @@ fn ss(s: impl AsRef<str>) -> SharedString {
     SharedString::from(s.as_ref())
 }
 
-/// The native window is used unless FRAGTAPE_WEB_UI is set (the old Edge window, kept as a fallback).
-pub fn enabled() -> bool {
-    std::env::var_os("FRAGTAPE_WEB_UI").is_none()
-}
-
 /// Start the window system on the main thread (before other threads ask for the window).
 pub fn init() {
     let _ = slint::invoke_from_event_loop(|| {});

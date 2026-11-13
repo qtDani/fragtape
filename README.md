@@ -4,9 +4,9 @@
 
 Automatic game recording and highlights for Windows, in the style of Outplayed and Medal.
 Fragtape notices when you launch a game and records it, or just its highlights. It
-detects kills and other big moments, and keeps everything in a clip library.
+detects kills and other big moments, and keeps everything in a video library.
 
-Fragtape is a small Rust app (one 1.8 MB `.exe`). For recording it uses a private,
+Fragtape is a small Rust app (a single `.exe` with a native window). For recording it uses a private,
 hidden copy of the OBS Studio you already have installed. That copy only runs while
 you play, and your own OBS setup is never touched.
 
@@ -32,7 +32,10 @@ the card goes to the corner of the monitor instead. Clicking the card doesn't ta
 
 The window has three pages:
 
-- **Clips:** every recording and clip, grouped by game, with thumbnails.
+- **Tapes:** every recording and clip, grouped by game, with thumbnails. Filter by type
+  (Highlights, Sessions, ★ favorites) or by game, or search.
+  - **Right-click** a tape for a quick menu: Open, Rename (typed right on the card),
+    Add to favorites, Show in folder, Delete.
   - Open one to play it. Kills and hotkey marks show as dots on the timeline and in
     the *Moments* list; click one to jump there.
   - Pick a start `[` and an end `]` to save that part as a new clip.
@@ -58,6 +61,7 @@ the file, so they show up in other video players too.
 | --- | --- |
 | Capture | **Game window**: Game Capture, with Window Capture underneath for games that can't be hooked. **Whole screen**: for anti-cheat games that come out black. |
 | Audio | **Game** only · Game + mic · All PC sound |
+| Record cursor | **On** · Off: the mouse pointer appears in the video when the game shows it |
 | Microphone in mono | On (default) · Off |
 | Quality | Small · Balanced · **High** · Max (constant quality on your GPU) · **Custom** (uses the advanced encoder settings) |
 | Frame rate | 30 · **60** |
@@ -117,7 +121,7 @@ can install ffmpeg for you.
 | --- | --- | --- |
 | Fragtape (tray) | ~25 MB RAM, ~0.13% of one CPU core | same |
 | Hidden OBS | **not running** | ~150–300 MB; video encoded on the GPU |
-| Window | only while open (Edge in app mode) | |
+| Window | only while open (native window) | |
 
 - **Starting and stopping:** the hidden OBS starts in about 1.5 s when a game you
   record is detected, and closes 15 s after the game ends.
@@ -132,7 +136,7 @@ can install ffmpeg for you.
   icons come from the PC: the game's `.exe`, or Steam's local library cache. Only games
   that aren't installed get Discord's icon, downloaded once and then kept, so the window
   itself never loads anything from the internet.
-- **The window's server:** it listens only on `127.0.0.1:3133`, checks the Host header,
+- **The local API:** it listens only on `127.0.0.1:3133`, checks the Host header,
   and requires a secret per-install token.
 
 ## Files
@@ -140,7 +144,7 @@ can install ffmpeg for you.
 - `%APPDATA%\Fragtape\`: `library.json` (games, modes, settings), `gamedb.json`
   (Discord's game list, refreshed weekly), `app.log`.
 - `%LOCALAPPDATA%\Fragtape\`: `clips.json` (titles, markers, favorites), `thumbs\`, `icons\`,
-  `engine\` (the hidden OBS's config), `window\` (the window's browser profile).
+  `engine\` (the hidden OBS's config).
 - `%LOCALAPPDATA%\Programs\Fragtape\Fragtape.exe`: the app.
 
 On first start, Fragtape takes over the games, settings and videos of OBSPlayed, its
@@ -163,7 +167,9 @@ cargo build --release      # target\release\fragtape.exe
 | `engine.rs`, `obsws.rs` | the hidden OBS (layout, config, start/stop) and an obs-websocket client |
 | `quality.rs` | presets and advanced settings mapped to OBS encoder settings |
 | `clips.rs` | clip library, thumbnails, trim, Recycle Bin, post-recording work |
-| `server.rs`, `assets/app.html` | the window (local API, video streaming with seeking) |
+| `ui/*.slint`, `src/ui/` | the native window (Slint): Tapes, Games and Settings pages, the player |
+| `video.rs` | video playback and thumbnails with Windows' Media Foundation |
+| `server.rs` | the local API used by the window and the tray |
 | `library.rs`, `gamedb.rs`, `importers.rs` | your games and settings, Discord's game list, Steam/Riot/Epic import |
 | `providers.rs` | League, CS2 and Dota 2 kill detection, GSI setup |
 | `tray.rs`, `win.rs`, `http.rs` | tray icon and hotkey, Win32 helpers, a WinHTTP client |

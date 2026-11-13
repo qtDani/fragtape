@@ -10,6 +10,13 @@ Fragtape is a small Rust app (a single `.exe` with a native window). For recordi
 hidden copy of the OBS Studio you already have installed. That copy only runs while
 you play, and your own OBS setup is never touched.
 
+![Tapes: every recording, grouped by game](docs/screenshots/tapes.png)
+
+<table><tr>
+<td><img src="docs/screenshots/games.png" alt="Games: choose what to record for each game"></td>
+<td><img src="docs/screenshots/settings.png" alt="Settings: recording options"></td>
+</tr></table>
+
 ## Using it
 
 Start **Fragtape** from the Start menu. It lives in the tray:

@@ -64,6 +64,8 @@ export global PlayerState {
     callback toggle-fullscreen();
     callback trim-start();
     callback trim-cancel();
+    callback trim-preview();           // play only the selection
+    in property <bool> previewing;
     callback trim-save();
     callback trim-move(int, float);    // handle 0/1, 0..1
     callback back();
@@ -313,6 +315,11 @@ export component Player inherits Rectangle {
                                     width: rng.preferred-width + 16px;
                                     border-width: 1px; border-color: #ffffff5a;
                                     rng := Text { text: PlayerState.sel-text; color: white; font-size: 12.5px; vertical-alignment: center; horizontal-alignment: center; }
+                                }
+                                if PlayerState.sel-on: Btn {
+                                    text: PlayerState.previewing ? "■ Stop" : "▶ Preview";
+                                    tip: "Play only the selected part";
+                                    clicked => { PlayerState.trim-preview(); keys.focus(); }
                                 }
                                 if PlayerState.sel-on: Btn {
                                     text: PlayerState.saving ? "Saving…" : "Save clip";

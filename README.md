@@ -56,7 +56,9 @@ The window has three pages:
     Add to favorites, Show in folder, Delete.
   - Open one to play it. Kills and hotkey marks show as dots on the timeline and in
     the *Moments* list; click one to jump there.
-  - Pick a start `[` and an end `]` to save that part as a new clip.
+  - Pick a start `[` and an end `]` (or the scissors button) to save that part as a new clip.
+    Dragging a handle shows that exact frame, and **▶ Preview** plays just the selected
+    part so you can check the result before saving.
   - Clips can be renamed, starred and deleted. Deleting moves them to the Recycle Bin.
 - **Games:** every game you've played. Each one has a mode:
   - **Ask:** ask me next time.

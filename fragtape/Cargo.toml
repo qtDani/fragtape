@@ -1,6 +1,6 @@
 [package]
 name = "fragtape"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Fragtape: automatic game recording and highlights, powered by a hidden OBS"
 

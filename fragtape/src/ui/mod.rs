@@ -566,7 +566,8 @@ fn wire_player(win: &AppWindow, s: &Arc<Shared>) {
         });
     });
     p.on_trim_start(|| { with_player(|p, w, _, ff| { p.trim_start(); p.draw_sel(w, ff); }); });
-    p.on_trim_cancel(|| { with_player(|p, w, _, ff| { p.sel = None; p.draw_sel(w, ff); }); });
+    p.on_trim_cancel(|| { with_player(|p, w, _, ff| { p.stop_preview(); p.sel = None; p.draw_sel(w, ff); }); });
+    p.on_trim_preview(|| { with_player(|p, _, _, _| { p.preview_sel(); p.poke(); }); });
     p.on_trim_move(|h, f| { with_player(|p, w, _, ff| { p.trim_move(h, f as f64); p.draw_sel(w, ff); }); });
     let s1 = s.clone();
     p.on_trim_save(move || {

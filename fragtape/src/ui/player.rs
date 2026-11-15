@@ -44,6 +44,8 @@ pub struct Player {
     autoplay: bool,
     buf: Vec<u8>,
     pub sel: Option<(f64, f64)>,
+    /// Playing just the trim selection: where to stop.
+    previewing: Option<f64>,
     dragging: Option<bool>, // Some(was playing)
     rate: usize,
     last_move: Instant,
@@ -123,7 +125,7 @@ impl Player {
         let p = Player {
             id: clip["id"].as_str().unwrap_or("").to_string(), video, preview: None,
             marks, now_mark: Some(usize::MAX), duration: dur, primed: false, autoplay: true,
-            buf: Vec::new(), sel: None, dragging: None, rate: 2, last_move: Instant::now(), hover_want: None, hover_busy: false,
+            buf: Vec::new(), sel: None, previewing: None, dragging: None, rate: 2, last_move: Instant::now(), hover_want: None, hover_busy: false,
             hover_t: Instant::now(), last_size: (0, 0), redraw: true,
         };
         p.draw_timeline(win, clip);
@@ -195,6 +197,17 @@ impl Player {
         }
         let d = self.dur();
         let t = self.video.time();
+        // previewing the trim selection: stop at its end
+        if let Some(end) = self.previewing {
+            if t >= end - 0.05 || self.video.ended() {
+                self.video.pause();
+                self.seek_to(end, false);
+                self.previewing = None;
+            } else if self.video.paused() {
+                self.previewing = None; // paused by hand
+            }
+        }
+        st.set_previewing(self.previewing.is_some());
         st.set_playing(!self.video.paused() && !self.video.ended());
         if self.dragging.is_none() { st.set_pos((t / d).clamp(0.0, 1.0) as f32); }
         st.set_time_text(ss(format!("{} / {}", clock(t), clock(d))));
@@ -362,11 +375,29 @@ impl Player {
         let (t, d) = (self.video.time(), self.dur());
         self.sel = Some(((t - 15.0).max(0.0), (t + 15.0).min(d)));
     }
+    /// Drag a trim handle: the video shows the frame under it, so you see where the clip starts/ends.
     pub fn trim_move(&mut self, handle: i32, frac: f64) {
         let t = frac * self.dur();
-        if let Some((a, b)) = self.sel.as_mut() {
-            if handle == 0 { *a = t.min(*b - 1.0).max(0.0) } else { *b = t.max(*a + 1.0) }
+        let Some((a, b)) = self.sel.as_mut() else { return };
+        if handle == 0 { *a = t.min(*b - 1.0).max(0.0) } else { *b = t.max(*a + 1.0) }
+        let at = if handle == 0 { *a } else { *b };
+        self.previewing = None;
+        self.video.pause();
+        self.seek_to(at, false);
+    }
+    /// Play only the selection, from its start, and stop at its end. Pressing it again stops.
+    pub fn preview_sel(&mut self) {
+        if self.previewing.take().is_some() {
+            self.video.pause();
+            return;
         }
+        if let Some((a, b)) = self.sel {
+            self.seek_to(a, true);
+            self.previewing = Some(b);
+        }
+    }
+    pub fn stop_preview(&mut self) {
+        if self.previewing.take().is_some() { self.video.pause(); }
     }
     pub fn mark_in(&mut self) {
         let (t, d) = (self.video.time(), self.dur());
